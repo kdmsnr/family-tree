@@ -1,0 +1,2 @@
+person p1 name="Taro Yamada" occupation=Engineer
+family f1 spouses=p1,p2 children=p3

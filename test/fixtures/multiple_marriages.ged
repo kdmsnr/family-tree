@@ -1,0 +1,26 @@
+0 @I1@ INDI
+1 NAME John /Root/
+1 SEX M
+1 BIRT
+2 DATE 1900
+0 @I2@ INDI
+1 NAME Alice /First/
+1 SEX F
+0 @I3@ INDI
+1 NAME Child /One/
+1 SEX F
+0 @I4@ INDI
+1 NAME Beth /Second/
+1 SEX F
+0 @I5@ INDI
+1 NAME Child /Two/
+1 SEX M
+0 @F1@ FAM
+1 HUSB @I1@
+1 WIFE @I2@
+1 CHIL @I3@
+0 @F2@ FAM
+1 HUSB @I1@
+1 WIFE @I4@
+1 CHIL @I5@
+0 TRLR

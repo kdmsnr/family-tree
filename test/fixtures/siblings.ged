@@ -1,0 +1,18 @@
+0 @I1@ INDI
+1 NAME Parent /One/
+1 SEX M
+0 @I2@ INDI
+1 NAME Parent /Two/
+1 SEX F
+0 @I3@ INDI
+1 NAME Child /A/
+1 SEX F
+0 @I4@ INDI
+1 NAME Child /B/
+1 SEX M
+0 @F1@ FAM
+1 HUSB @I1@
+1 WIFE @I2@
+1 CHIL @I3@
+1 CHIL @I4@
+0 TRLR

@@ -1,0 +1,112 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "optparse"
+require_relative "../lib/family_tree"
+
+module FamilyTree
+  class CLI
+    def self.run(argv)
+      new.run(argv)
+    end
+
+    def run(argv)
+      command = argv.shift
+
+      case command
+      when "render"
+        run_render(argv)
+      when nil, "help", "-h", "--help"
+        puts global_usage
+        0
+      else
+        warn "error: unknown command '#{command}'."
+        warn global_usage
+        1
+      end
+    end
+
+    private
+
+    def run_render(argv)
+      options = { strict: false, format: "auto" }
+      parser = build_render_parser(options)
+
+      parser.parse!(argv)
+      input_path = argv.shift
+      if input_path.nil? || input_path.strip.empty?
+        warn "error: INPUT file is required."
+        warn parser
+        return 1
+      end
+      if options[:output].nil? || options[:output].strip.empty?
+        warn "error: OUTPUT.svg is required with -o/--output."
+        warn parser
+        return 1
+      end
+      if argv.any?
+        warn "error: unexpected arguments: #{argv.join(' ')}"
+        warn parser
+        return 1
+      end
+
+      text = File.read(input_path, mode: "r:BOM|UTF-8")
+      result = InputParser.new(strict: options[:strict]).parse_text(
+        text,
+        format: options[:format],
+        input_path: input_path
+      )
+      result.warnings.each { |warning| warn "warning: #{warning}" }
+
+      layout = LayoutEngine.new.layout(result)
+      Renderer.new.render_to_file(layout, options[:output])
+      puts "Wrote #{options[:output]}"
+      0
+    rescue OptionParser::ParseError => e
+      warn "error: #{e.message}"
+      warn parser
+      1
+    rescue Errno::ENOENT
+      warn "error: input file not found: #{input_path}"
+      1
+    rescue ParseError, RenderError => e
+      warn "error: #{e.message}"
+      1
+    end
+
+    def build_render_parser(options)
+      OptionParser.new do |opts|
+        opts.banner = "Usage: family-tree render INPUT -o OUTPUT.svg [--format auto|gedcom|simple] [--strict]"
+
+        opts.on("-o", "--output PATH", "Path to output SVG") do |path|
+          options[:output] = path
+        end
+
+        opts.on("--strict", "Fail on unsupported statements/tags") do
+          options[:strict] = true
+        end
+
+        opts.on("--format FORMAT", "Input format: auto, gedcom, simple (default: auto)") do |format|
+          options[:format] = format
+        end
+
+        opts.on("-h", "--help", "Show help for render command") do
+          puts opts
+          exit 0
+        end
+      end
+    end
+
+    def global_usage
+      <<~USAGE
+        Usage:
+          family-tree render INPUT -o OUTPUT.svg [--format auto|gedcom|simple] [--strict]
+
+        Commands:
+          render    Parse family tree text and export SVG.
+      USAGE
+    end
+  end
+end
+
+exit(FamilyTree::CLI.run(ARGV))

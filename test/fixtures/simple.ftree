@@ -1,0 +1,5 @@
+# Simple family tree format
+person p1 name="Taro Yamada" sex=M birth=1970
+person p2 name="Hanako Suzuki" sex=F birth=1973
+person p3 name="Ichiro Yamada" sex=M birth=2000
+family f1 husband=p1 wife=p2 children=p3
