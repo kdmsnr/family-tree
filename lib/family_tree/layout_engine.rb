@@ -128,6 +128,7 @@ module FamilyTree
           child_id: child_node.id,
           y: child_node.y,
           width: child_node.width,
+          original_x: child_node.x,
           target_center_x: target_center_x
         }
       end
@@ -150,6 +151,8 @@ module FamilyTree
         child_node = node_by_id[entry[:child_id]]
         child_node.x = entry[:target_center_x] - (child_node.width / 2.0)
       end
+
+      revert_overlapping_centered_nodes!(node_by_id, accepted)
     end
 
     def center_conflict?(entry, fixed_nodes, accepted_candidates)
@@ -168,6 +171,28 @@ module FamilyTree
       end
 
       false
+    end
+
+    def revert_overlapping_centered_nodes!(node_by_id, accepted_candidates)
+      accepted_candidates.each do |entry|
+        child_node = node_by_id[entry[:child_id]]
+        next if child_node.nil?
+        next unless row_overlap?(child_node, node_by_id.values)
+
+        child_node.x = entry[:original_x]
+      end
+    end
+
+    def row_overlap?(node, all_nodes)
+      min_center_gap = node.width + (@metrics[:node_gap] * 0.35)
+      node_center = node_center_x(node)
+
+      all_nodes.any? do |other_node|
+        next false if other_node.id == node.id
+        next false unless (other_node.y - node.y).abs <= 0.01
+
+        (node_center_x(other_node) - node_center).abs < min_center_gap
+      end
     end
 
     def node_center_x(node)

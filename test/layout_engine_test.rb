@@ -79,6 +79,25 @@ class LayoutEngineTest < Minitest::Test
     assert_in_delta norisuke_taiko_center, ikura_center, 0.5
   end
 
+  def test_does_not_overlap_nodes_in_jojo_showcase
+    text = File.read(File.expand_path("../samples/jojo-showcase.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "jojo-showcase.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    node_by_id = layout.nodes.each_with_object({}) { |node, acc| acc[node.id] = node }
+
+    holy = node_by_id.fetch("g4j1f")
+    josuke = node_by_id.fetch("g4j2m")
+    holy_right = holy.x + holy.width
+    josuke_right = josuke.x + josuke.width
+
+    overlaps = holy_right > josuke.x && josuke_right > holy.x
+    refute overlaps
+  end
+
   private
 
   def node_center_x(node)

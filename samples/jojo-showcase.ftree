@@ -1,0 +1,54 @@
+# jojo-showcase.ftree
+# JoJo's Bizarre Adventure (Joestar line) sample
+# Includes:
+# - multiple generations
+# - branching lines
+# - half-siblings / parallel descendants
+
+# Generation 0
+person g0j1m name="George Joestar I" sex=M birth=1838 death=1889
+person g0j1f name="Mary Joestar" sex=F birth=1841 death=1880
+person g0b1m name="Dario Brando" sex=M birth=1835 death=1880
+person g0b1f name="Brando Mother" sex=F birth=1840
+
+# Generation 1
+person g1j1m name="Jonathan Joestar" sex=M birth=1868 death=1889
+person g1b1m name="Dio Brando" sex=M birth=1868 death=1889
+person g1j1f name="Erina Pendleton" sex=F birth=1869 death=1950
+
+# Generation 2
+person g2j1m name="George Joestar II" sex=M birth=1890 death=1943
+person g2j1f name="Lisa Lisa" sex=F birth=1889 death=1988
+
+# Generation 3
+person g3j1m name="Joseph Joestar" sex=M birth=1920 death=2012
+person g3j1f name="Suzi Q" sex=F birth=1920
+person g3j2f name="Tomoko Higashikata" sex=F birth=1960
+
+# Generation 4
+person g4j1f name="Holy Kujo" sex=F birth=1945
+person g4j1m name="Sadao Kujo" sex=M birth=1942
+person g4j2m name="Josuke Higashikata" sex=M birth=1983
+
+# Generation 5
+person g5j1m name="Jotaro Kujo" sex=M birth=1970
+person g5j1f name="Jotaro Wife" sex=F birth=1972
+
+# Generation 6
+person g6j1f name="Jolyne Cujoh" sex=F birth=1992
+
+# DIO descendants (parallel branch)
+person g4d1m name="Giorno Giovanna" sex=M birth=1985
+person g4d2m name="Ungalo" sex=M birth=1987
+person g4d3m name="Rikiel" sex=M birth=1987
+person g4d4m name="Donatello Versus" sex=M birth=1988
+
+family f0j husband=g0j1m wife=g0j1f children=g1j1m
+family f0b husband=g0b1m wife=g0b1f children=g1b1m
+family f1j husband=g1j1m wife=g1j1f children=g2j1m
+family f2j husband=g2j1m wife=g2j1f children=g3j1m
+family f3j husband=g3j1m wife=g3j1f children=g4j1f
+family f3j_branch husband=g3j1m wife=g3j2f children=g4j2m
+family f4j husband=g4j1m wife=g4j1f children=g5j1m
+family f5j husband=g5j1m wife=g5j1f children=g6j1f
+family f_dio_desc husband=g1b1m children=g4d1m,g4d2m,g4d3m,g4d4m
