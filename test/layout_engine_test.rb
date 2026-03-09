@@ -109,6 +109,19 @@ class LayoutEngineTest < Minitest::Test
     assert_equal "images/taro.png", node.image_path
   end
 
+  def test_keeps_viserys_and_daemon_on_same_generation_in_targaryen_sample
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    node_by_id = layout.nodes.each_with_object({}) { |node, acc| acc[node.id] = node }
+
+    assert_in_delta node_by_id.fetch("g1t4m").y, node_by_id.fetch("g1t5m").y, 0.01
+  end
+
   private
 
   def node_center_x(node)

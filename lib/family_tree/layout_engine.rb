@@ -209,8 +209,8 @@ module FamilyTree
 
       union_find = UnionFind.from_elements(person_ids)
       families.each do |family|
-        spouses = [family.husband_id, family.wife_id].compact.uniq
-        spouses.each_cons(2) { |left, right| union_find.union(left, right) }
+        siblings = family.child_ids.compact.uniq
+        siblings.each_cons(2) { |left, right| union_find.union(left, right) }
       end
 
       constraints = []
@@ -246,8 +246,66 @@ module FamilyTree
         break unless changed
       end
 
-      person_ids.each_with_object({}) do |person_id, levels|
-        levels[person_id] = group_level[union_find.find(person_id)]
+      levels = person_ids.each_with_object({}) do |person_id, acc|
+        acc[person_id] = group_level[union_find.find(person_id)]
+      end
+      align_non_descendant_spouse_levels(levels, families)
+      levels
+    end
+
+    def align_non_descendant_spouse_levels(levels, families)
+      parent_ids = {}
+      child_ids_by_parent = Hash.new { |hash, key| hash[key] = [] }
+      spouse_neighbors = Hash.new { |hash, key| hash[key] = [] }
+
+      families.each do |family|
+        parents = [family.husband_id, family.wife_id].compact.uniq
+        children = family.child_ids.compact.uniq
+        children.each { |child_id| parent_ids[child_id] = true }
+
+        parents.each do |parent_id|
+          child_ids_by_parent[parent_id].concat(children)
+        end
+
+        parents.each_with_index do |left_id, left_index|
+          parents[(left_index + 1)..].to_a.each do |right_id|
+            spouse_neighbors[left_id] << right_id
+            spouse_neighbors[right_id] << left_id
+          end
+        end
+      end
+
+      adjustable_ids = levels.keys.reject { |person_id| parent_ids[person_id] }
+      return if adjustable_ids.empty?
+
+      iterations = [levels.length * 2, 1].max
+      iterations.times do
+        changed = false
+        adjustable_ids.each do |person_id|
+          neighbors = spouse_neighbors[person_id]
+          next if neighbors.empty?
+
+          neighbor_levels = neighbors.filter_map { |neighbor_id| levels[neighbor_id] }
+          next if neighbor_levels.empty?
+
+          desired = (neighbor_levels.sum.to_f / neighbor_levels.length).round
+          min_level = 0
+          max_level = Float::INFINITY
+
+          children = child_ids_by_parent[person_id].uniq
+          unless children.empty?
+            max_level = children.map { |child_id| levels.fetch(child_id, desired) - 1 }.min
+          end
+          next if max_level < min_level
+
+          adjusted = [[desired, min_level].max, max_level].min
+          next if adjusted == levels[person_id]
+
+          levels[person_id] = adjusted
+          changed = true
+        end
+
+        break unless changed
       end
     end
 

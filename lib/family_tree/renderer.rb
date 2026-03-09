@@ -13,14 +13,25 @@ module FamilyTree
     EDGE_LANE_GAP = 12.0
     MIN_VERTICAL_GAP = 10.0
     MIN_SIBLING_BUS_VERTICAL_GAP = 10.0
+    MIN_SPOUSE_ROW_VERTICAL_GAP = 24.0
+    MIN_SPOUSE_ROW_SPACING_WIDTH = 100.0
     SPOUSE_INNER_OFFSET_RATIO = 0.28
     NODE_INNER_MARGIN = 12.0
     VERTICAL_COLLISION_THRESHOLD = 6.0
+    PREFERRED_VERTICAL_CLEARANCE = 22.0
+    PREFERRED_HORIZONTAL_CLEARANCE = 20.0
+    VERTICAL_CLEARANCE_PENALTY = 20.0
+    HORIZONTAL_CLEARANCE_PENALTY = 16.0
     MAX_BRANCH_SHIFT_STEPS = 8
+    MAX_LEG_SHIFT_STEPS = 24
+    SPOUSE_CROSSING_PENALTY = 64.0
+    SPOUSE_EDGE_AVOID_MARGIN = 10.0
+    SPOUSE_EDGE_AVOID_PENALTY = 80.0
     CHILD_STROKE_WIDTH = 1.4
     SPOUSE_STROKE_WIDTH = 2.0
     CHILD_HALO_WIDTH = 4.2
     SPOUSE_MULTI_FAMILY_OFFSET_GAP = 10.0
+    SPOUSE_SAME_SIDE_FAMILY_OFFSET_GAP = 96.0
     MULTI_MARRIAGE_FAMILY_VERTICAL_GAP = 16.0
     BRIDGE_RADIUS = 4.0
     BRIDGE_CUTOUT_RADIUS = 5.8
@@ -29,6 +40,7 @@ module FamilyTree
     NODE_IMAGE_MARGIN_LEFT = 8.0
     NODE_TEXT_GAP = 8.0
     NODE_TEXT_RIGHT_MARGIN = 8.0
+    SPOUSE_LEG_BEND_DROP = 8.0
 
     def render(layout_result)
       node_by_id = layout_result.nodes.each_with_object({}) { |node, acc| acc[node.id] = node }
@@ -110,8 +122,10 @@ module FamilyTree
     def edge_lines(families, node_by_id)
       spouse_lines = []
       child_lines = []
+      occupied_spouse_verticals = []
+      occupied_spouse_horizontals = []
       occupied_child_verticals = []
-      occupied_child_horizontals = []
+      all_nodes = node_by_id.values
       entries = families.filter_map do |family|
         spouse_nodes = family.spouse_ids.filter_map { |person_id| node_by_id[person_id] }
         child_nodes = family.child_ids.filter_map { |person_id| node_by_id[person_id] }
@@ -127,7 +141,7 @@ module FamilyTree
       lane_offsets = assign_lane_offsets(entries)
       spouse_anchor_offsets = assign_spouse_anchor_offsets(entries)
       family_vertical_offsets = assign_family_vertical_offsets(entries)
-      entries.each do |entry|
+      spouse_layout = entries.map do |entry|
         lane_offset = lane_offsets.fetch(entry[:family].id, 0.0)
         family_vertical_offset = family_vertical_offsets.fetch(entry[:family].id, 0.0)
         trunk_x, marriage_y = draw_spouse_section(
@@ -137,16 +151,39 @@ module FamilyTree
           entry[:child_nodes],
           lane_offset,
           spouse_anchor_offsets,
-          family_vertical_offset
+          family_vertical_offset,
+          occupied_spouse_verticals,
+          occupied_spouse_horizontals,
+          all_nodes
         )
+        {
+          entry: entry,
+          lane_offset: lane_offset,
+          trunk_x: trunk_x,
+          marriage_y: marriage_y
+        }
+      end
+
+      occupied_child_horizontals = spouse_lines.filter_map { |line| parse_svg_line_segment(line) }
+                                            .select { |segment| horizontal_segment?(segment) }
+                                            .map do |segment|
+        {
+          x1: [segment[:x1], segment[:x2]].min,
+          x2: [segment[:x1], segment[:x2]].max,
+          y: segment[:y1]
+        }
+      end
+
+      spouse_layout.each do |placement|
         draw_children_section(
           child_lines,
-          trunk_x,
-          marriage_y,
-          entry[:child_nodes],
-          lane_offset,
+          placement[:trunk_x],
+          placement[:marriage_y],
+          placement[:entry][:child_nodes],
+          placement[:lane_offset],
           occupied_child_verticals,
-          occupied_child_horizontals
+          occupied_child_horizontals,
+          all_nodes
         )
       end
 
@@ -272,12 +309,29 @@ module FamilyTree
         unique_entries = person_entries.uniq
         next if unique_entries.length <= 1
 
+        person_center = unique_entries.flat_map { |entry| entry[:spouse_nodes] }
+                                     .find { |node| node.id == person_id }
+                                     .yield_self { |node| node.nil? ? nil : node_center_x(node) }
+        next if person_center.nil?
+
         sorted_entries = unique_entries.sort_by do |entry|
           family_center_x(entry[:spouse_nodes], entry[:child_nodes])
         end
         center = (sorted_entries.length - 1) / 2.0
+        family_centers = sorted_entries.map { |entry| family_center_x(entry[:spouse_nodes], entry[:child_nodes]) }
+        all_left = family_centers.all? { |center_x| center_x < (person_center - LINE_EPSILON) }
+        all_right = family_centers.all? { |center_x| center_x > (person_center + LINE_EPSILON) }
+        offset_gap = if all_left || all_right
+                       SPOUSE_SAME_SIDE_FAMILY_OFFSET_GAP
+                     else
+                       SPOUSE_MULTI_FAMILY_OFFSET_GAP
+                     end
         sorted_entries.each_with_index do |entry, index|
-          offset = (index - center) * SPOUSE_MULTI_FAMILY_OFFSET_GAP
+          offset = if all_left || all_right
+                     (center - index) * offset_gap
+                   else
+                     (index - center) * offset_gap
+                   end
           offsets[[entry[:family].id, person_id]] = offset
         end
       end
@@ -293,12 +347,56 @@ module FamilyTree
 
       offsets = {}
       grouped.each_value do |group|
-        sorted = group.sort_by { |entry| family_center_x(entry[:spouse_nodes], entry[:child_nodes]) }
-        sorted.each_with_index do |entry, index|
-          offsets[entry[:family].id] = index * EDGE_LANE_GAP
+        lane_occupancy = []
+        prioritized = group.map do |entry|
+          left_x, right_x = family_horizontal_span(entry[:spouse_nodes], entry[:child_nodes])
+          {
+            entry: entry,
+            left_x: left_x,
+            right_x: right_x,
+            width: right_x - left_x,
+            center_x: (left_x + right_x) / 2.0
+          }
+        end.sort_by do |item|
+          [
+            item[:width],
+            item[:center_x],
+            item[:entry][:family].id
+          ]
+        end
+
+        prioritized.each do |item|
+          lane_index = 0
+          while lane_conflict?(item[:left_x], item[:right_x], lane_occupancy[lane_index])
+            lane_index += 1
+          end
+
+          lane_occupancy[lane_index] ||= []
+          lane_occupancy[lane_index] << [item[:left_x], item[:right_x]]
+          offsets[item[:entry][:family].id] = lane_index * EDGE_LANE_GAP
         end
       end
       offsets
+    end
+
+    def family_horizontal_span(spouse_nodes, child_nodes)
+      anchors = if spouse_nodes.any?
+                  spouse_nodes.map { |node| node_center_x(node) }
+                else
+                  child_nodes.map { |node| node_center_x(node) }
+                end
+      return [0.0, 0.0] if anchors.empty?
+
+      left_x, right_x = anchors.minmax
+      [left_x, right_x]
+    end
+
+    def lane_conflict?(left_x, right_x, occupied_ranges)
+      return false if occupied_ranges.nil? || occupied_ranges.empty?
+
+      occupied_ranges.any? do |occupied_left_x, occupied_right_x|
+        ranges_overlap?(left_x, right_x, occupied_left_x, occupied_right_x)
+      end
     end
 
     def family_level_key(spouse_nodes, child_nodes)
@@ -323,7 +421,18 @@ module FamilyTree
       anchors.sum / anchors.length.to_f
     end
 
-    def draw_spouse_section(lines, family_id, spouse_nodes, child_nodes, lane_offset, spouse_anchor_offsets, family_vertical_offset)
+    def draw_spouse_section(
+      lines,
+      family_id,
+      spouse_nodes,
+      child_nodes,
+      lane_offset,
+      spouse_anchor_offsets,
+      family_vertical_offset,
+      occupied_verticals,
+      occupied_horizontals,
+      node_obstacles
+    )
       if spouse_nodes.empty?
         child_anchors = child_nodes.map { |node| [node_center_x(node), node.y] }.sort_by(&:first)
         return [0.0, 0.0] if child_anchors.empty?
@@ -341,18 +450,162 @@ module FamilyTree
       marriage_y = baseline_marriage_y + lane_offset + family_vertical_offset
       min_marriage_y = anchors.map(&:last).max + MIN_VERTICAL_GAP
       marriage_y = [marriage_y, min_marriage_y].max
-
       if anchors.length > 1
-        anchors.each do |anchor_x, anchor_y|
-          lines << svg_line(anchor_x, anchor_y, anchor_x, marriage_y)
-        end
-        lines << svg_line(anchors.first[0], marriage_y, anchors.last[0], marriage_y)
-      else
-        lines << svg_line(anchors.first[0], anchors.first[1], anchors.first[0], marriage_y)
+        marriage_y = resolve_spouse_marriage_y(
+          marriage_y,
+          min_marriage_y,
+          anchors.first[0],
+          anchors.last[0],
+          occupied_horizontals
+        )
       end
 
-      trunk_x = anchors.sum(&:first) / anchors.length
-      [trunk_x, marriage_y]
+      if anchors.length > 1
+        family_center_x = anchors.sum(&:first) / anchors.length.to_f
+        routed_anchors = anchors.map do |anchor_x, anchor_y|
+          leg_x = resolve_spouse_leg_x(
+            anchor_x,
+            anchor_y,
+            marriage_y,
+            family_center_x,
+            occupied_verticals,
+            occupied_horizontals,
+            node_obstacles
+          )
+          draw_spouse_leg(
+            lines,
+            anchor_x,
+            anchor_y,
+            leg_x,
+            marriage_y,
+            occupied_verticals,
+            occupied_horizontals
+          )
+          [leg_x, anchor_y]
+        end
+        routed_anchors.sort_by!(&:first)
+        lines << svg_line(routed_anchors.first[0], marriage_y, routed_anchors.last[0], marriage_y)
+        register_horizontal_segment(occupied_horizontals, routed_anchors.first[0], routed_anchors.last[0], marriage_y)
+        trunk_x = routed_anchors.sum(&:first) / routed_anchors.length.to_f
+        return [trunk_x, marriage_y]
+      else
+        anchor_x, anchor_y = anchors.first
+        leg_x = resolve_spouse_leg_x(
+          anchor_x,
+          anchor_y,
+          marriage_y,
+          anchor_x,
+          occupied_verticals,
+          occupied_horizontals,
+          node_obstacles
+        )
+        draw_spouse_leg(
+          lines,
+          anchor_x,
+          anchor_y,
+          leg_x,
+          marriage_y,
+          occupied_verticals,
+          occupied_horizontals
+        )
+        return [leg_x, marriage_y]
+      end
+    end
+
+    def draw_spouse_leg(lines, anchor_x, anchor_y, leg_x, marriage_y, occupied_verticals, occupied_horizontals)
+      if (leg_x - anchor_x).abs > 0.5
+        bend_y = resolve_spouse_leg_bend_y(anchor_x, leg_x, anchor_y, marriage_y, occupied_horizontals)
+        if (bend_y - anchor_y).abs > 0.5
+          lines << svg_line(anchor_x, anchor_y, anchor_x, bend_y)
+          register_vertical_segment(occupied_verticals, anchor_x, anchor_y, bend_y)
+          lines << svg_line(anchor_x, bend_y, leg_x, bend_y)
+          register_horizontal_segment(
+            occupied_horizontals,
+            [anchor_x, leg_x].min,
+            [anchor_x, leg_x].max,
+            bend_y
+          )
+          if (marriage_y - bend_y).abs > 0.5
+            lines << svg_line(leg_x, bend_y, leg_x, marriage_y)
+            register_vertical_segment(occupied_verticals, leg_x, bend_y, marriage_y)
+          end
+          return
+        end
+      end
+
+      lines << svg_line(leg_x, anchor_y, leg_x, marriage_y)
+      register_vertical_segment(occupied_verticals, leg_x, anchor_y, marriage_y)
+    end
+
+    def resolve_spouse_leg_bend_y(anchor_x, leg_x, anchor_y, marriage_y, occupied_horizontals)
+      start_y = [anchor_y + SPOUSE_LEG_BEND_DROP, marriage_y].min
+      return start_y if (leg_x - anchor_x).abs <= 0.5
+
+      step = [EDGE_LANE_GAP * 0.5, 4.0].max
+      min_x = [anchor_x, leg_x].min
+      max_x = [anchor_x, leg_x].max
+      candidate_y = start_y
+      best_candidate_y = nil
+      best_score = nil
+      while candidate_y <= marriage_y + LINE_EPSILON
+        unless horizontal_bus_collision?(min_x, max_x, candidate_y, occupied_horizontals)
+          clearance_penalty = horizontal_clearance_penalty(min_x, max_x, candidate_y, occupied_horizontals)
+          distance_cost = (candidate_y - start_y).abs * 0.25
+          score = clearance_penalty + distance_cost
+          if best_score.nil? || score < best_score
+            best_score = score
+            best_candidate_y = candidate_y
+          end
+        end
+
+        candidate_y += step
+      end
+
+      return best_candidate_y unless best_candidate_y.nil?
+
+      start_y
+    end
+
+    def resolve_spouse_marriage_y(desired_y, min_y, left_x, right_x, occupied_horizontals)
+      step = [EDGE_LANE_GAP * 0.5, 4.0].max
+      base_y = [desired_y, min_y].max
+      max_steps = 32
+      best_candidate_y = nil
+      best_score = nil
+      max_steps.times do |step_index|
+        offsets = if step_index.zero?
+                    [0.0]
+                  else
+                    # Prefer moving upward first when both sides are equally close.
+                    [-(step_index * step), step_index * step]
+                  end
+
+        offsets.each do |offset|
+          candidate_y = base_y + offset
+          next if candidate_y < min_y
+
+          collision = occupied_horizontals.any? do |segment|
+            width = segment[:x2] - segment[:x1]
+            next false if width < MIN_SPOUSE_ROW_SPACING_WIDTH
+            next false unless ranges_overlap?(left_x, right_x, segment[:x1], segment[:x2])
+
+            (segment[:y] - candidate_y).abs < MIN_SPOUSE_ROW_VERTICAL_GAP
+          end
+          next if collision
+
+          distance_cost = (candidate_y - base_y).abs
+          clearance_penalty = horizontal_clearance_penalty(left_x, right_x, candidate_y, occupied_horizontals)
+          score = distance_cost + clearance_penalty
+          next unless best_score.nil? || score < best_score
+
+          best_score = score
+          best_candidate_y = candidate_y
+        end
+      end
+
+      return best_candidate_y unless best_candidate_y.nil?
+
+      base_y
     end
 
     def spouse_anchors(spouse_nodes, family_id, spouse_anchor_offsets)
@@ -393,11 +646,20 @@ module FamilyTree
       end
     end
 
-    def draw_children_section(lines, trunk_x, marriage_y, child_nodes, lane_offset, occupied_verticals, occupied_horizontals)
+    def draw_children_section(
+      lines,
+      trunk_x,
+      marriage_y,
+      child_nodes,
+      lane_offset,
+      occupied_verticals,
+      occupied_horizontals,
+      node_obstacles
+    )
       return if child_nodes.empty?
 
-      child_anchors = child_nodes.map { |node| [node_center_x(node), node.y] }.sort_by(&:first)
-      min_child_y = child_anchors.map(&:last).min
+      child_anchors = child_nodes.map { |node| { x: node_center_x(node), y: node.y } }.sort_by { |anchor| anchor[:x] }
+      min_child_y = child_anchors.map { |anchor| anchor[:y] }.min
       desired_sibling_y = marriage_y + SIBLING_GAP + (lane_offset * SIBLING_LANE_OFFSET_FACTOR)
       sibling_y, branch_x = resolve_sibling_geometry(
         trunk_x,
@@ -406,34 +668,90 @@ module FamilyTree
         min_child_y,
         child_anchors,
         occupied_verticals,
-        occupied_horizontals
+        occupied_horizontals,
+        node_obstacles
       )
-
-      if (branch_x - trunk_x).abs > 0.5
-        lines << svg_line(trunk_x, marriage_y, branch_x, marriage_y)
+      child_connectors = child_anchors.map do |child_anchor|
+        child_x = child_anchor[:x]
+        connector_x = resolve_child_connector_x(
+          child_x,
+          sibling_y,
+          child_anchor[:y],
+          branch_x,
+          occupied_verticals,
+          occupied_horizontals,
+          node_obstacles
+        )
+        child_anchor.merge(connector_x: connector_x)
       end
 
-      lines << svg_line(branch_x, marriage_y, branch_x, sibling_y)
-      register_vertical_segment(occupied_verticals, branch_x, marriage_y, sibling_y)
+      branch_start_y = marriage_y
+      if (branch_x - trunk_x).abs > 0.5
+        branch_turn_y = resolve_branch_turn_y(
+          marriage_y,
+          sibling_y,
+          [trunk_x, branch_x].min,
+          [trunk_x, branch_x].max,
+          occupied_horizontals
+        )
+        if (branch_turn_y - marriage_y).abs > 0.5
+          lines << svg_line(trunk_x, marriage_y, trunk_x, branch_turn_y)
+          register_vertical_segment(occupied_verticals, trunk_x, marriage_y, branch_turn_y)
+          lines << svg_line(trunk_x, branch_turn_y, branch_x, branch_turn_y)
+          register_horizontal_segment(
+            occupied_horizontals,
+            [trunk_x, branch_x].min,
+            [trunk_x, branch_x].max,
+            branch_turn_y
+          )
+          branch_start_y = branch_turn_y
+        else
+          lines << svg_line(trunk_x, marriage_y, branch_x, marriage_y)
+          register_horizontal_segment(
+            occupied_horizontals,
+            [trunk_x, branch_x].min,
+            [trunk_x, branch_x].max,
+            marriage_y
+          )
+        end
+      end
 
-      if child_anchors.length > 1
-        sibling_left_x = [child_anchors.first[0], branch_x].min
-        sibling_right_x = [child_anchors.last[0], branch_x].max
+      lines << svg_line(branch_x, branch_start_y, branch_x, sibling_y)
+      register_vertical_segment(occupied_verticals, branch_x, branch_start_y, sibling_y)
+
+      if child_connectors.length > 1
+        connector_xs = child_connectors.map { |anchor| anchor[:connector_x] } + [branch_x]
+        sibling_left_x = connector_xs.min
+        sibling_right_x = connector_xs.max
         lines << svg_line(sibling_left_x, sibling_y, sibling_right_x, sibling_y)
         register_horizontal_segment(occupied_horizontals, sibling_left_x, sibling_right_x, sibling_y)
-      elsif (branch_x - child_anchors.first[0]).abs > 0.5
-        lines << svg_line(branch_x, sibling_y, child_anchors.first[0], sibling_y)
+      elsif (branch_x - child_connectors.first[:connector_x]).abs > 0.5
+        lines << svg_line(branch_x, sibling_y, child_connectors.first[:connector_x], sibling_y)
         register_horizontal_segment(
           occupied_horizontals,
-          [branch_x, child_anchors.first[0]].min,
-          [branch_x, child_anchors.first[0]].max,
+          [branch_x, child_connectors.first[:connector_x]].min,
+          [branch_x, child_connectors.first[:connector_x]].max,
           sibling_y
         )
       end
 
-      child_anchors.each do |child_x, child_y|
-        lines << svg_line(child_x, sibling_y, child_x, child_y)
-        register_vertical_segment(occupied_verticals, child_x, sibling_y, child_y)
+      child_connectors.each do |child_anchor|
+        child_x = child_anchor[:x]
+        child_y = child_anchor[:y]
+        connector_x = child_anchor[:connector_x]
+
+        lines << svg_line(connector_x, sibling_y, connector_x, child_y)
+        register_vertical_segment(occupied_verticals, connector_x, sibling_y, child_y)
+
+        next unless (connector_x - child_x).abs > 0.5
+
+        lines << svg_line(connector_x, child_y, child_x, child_y)
+        register_horizontal_segment(
+          occupied_horizontals,
+          [connector_x, child_x].min,
+          [connector_x, child_x].max,
+          child_y
+        )
       end
     end
 
@@ -444,7 +762,8 @@ module FamilyTree
       min_child_y,
       child_anchors,
       occupied_verticals,
-      occupied_horizontals
+      occupied_horizontals,
+      node_obstacles
     )
       max_sibling_y = min_child_y - MIN_VERTICAL_GAP
       min_sibling_y = marriage_y + MIN_VERTICAL_GAP
@@ -455,7 +774,9 @@ module FamilyTree
           marriage_y,
           sibling_y,
           child_anchors,
-          occupied_verticals
+          occupied_verticals,
+          occupied_horizontals,
+          node_obstacles
         )
         return [sibling_y, branch_x]
       end
@@ -468,13 +789,15 @@ module FamilyTree
           marriage_y,
           candidate_y,
           child_anchors,
-          occupied_verticals
+          occupied_verticals,
+          occupied_horizontals,
+          node_obstacles
         )
-        sibling_left_x = [child_anchors.first[0], candidate_branch_x].min
-        sibling_right_x = [child_anchors.last[0], candidate_branch_x].max
+        sibling_left_x = [child_anchors.first[:x], candidate_branch_x].min
+        sibling_right_x = [child_anchors.last[:x], candidate_branch_x].max
 
-        collision = child_anchors.any? do |child_x, child_y|
-          vertical_collision?(child_x, candidate_y, child_y, occupied_verticals)
+        collision = child_anchors.any? do |child_anchor|
+          vertical_collision?(child_anchor[:x], candidate_y, child_anchor[:y], occupied_verticals)
         end
         bus_collision = horizontal_bus_collision?(
           sibling_left_x,
@@ -492,9 +815,38 @@ module FamilyTree
         marriage_y,
         max_sibling_y,
         child_anchors,
-        occupied_verticals
+        occupied_verticals,
+        occupied_horizontals,
+        node_obstacles
       )
       [max_sibling_y, final_branch_x]
+    end
+
+    def resolve_branch_turn_y(marriage_y, sibling_y, left_x, right_x, occupied_horizontals)
+      step = [EDGE_LANE_GAP * 0.5, 4.0].max
+      min_turn_y = marriage_y + step
+      max_turn_y = sibling_y - MIN_VERTICAL_GAP
+      return marriage_y if max_turn_y <= min_turn_y + LINE_EPSILON
+
+      candidate_y = min_turn_y
+      best_candidate_y = nil
+      best_score = nil
+      while candidate_y <= max_turn_y + LINE_EPSILON
+        unless horizontal_bus_collision?(left_x, right_x, candidate_y, occupied_horizontals)
+          clearance_penalty = horizontal_clearance_penalty(left_x, right_x, candidate_y, occupied_horizontals)
+          distance_cost = (candidate_y - min_turn_y).abs * 0.35
+          score = clearance_penalty + distance_cost
+          if best_score.nil? || score < best_score
+            best_score = score
+            best_candidate_y = candidate_y
+          end
+        end
+        candidate_y += step
+      end
+
+      return best_candidate_y unless best_candidate_y.nil?
+
+      marriage_y
     end
 
     def horizontal_bus_collision?(x1, x2, y, occupied_horizontals)
@@ -513,8 +865,16 @@ module FamilyTree
       }
     end
 
-    def resolve_branch_x(base_x, y1, y2, child_anchors, occupied_verticals)
-      child_center_x = child_anchors.sum(&:first) / child_anchors.length
+    def resolve_branch_x(
+      base_x,
+      y1,
+      y2,
+      child_anchors,
+      occupied_verticals,
+      occupied_horizontals,
+      node_obstacles
+    )
+      child_center_x = child_anchors.sum { |anchor| anchor[:x] } / child_anchors.length
       preferred_direction = child_center_x >= base_x ? 1.0 : -1.0
 
       candidate_offsets = [0.0]
@@ -523,14 +883,204 @@ module FamilyTree
         candidate_offsets << (-preferred_direction * EDGE_LANE_GAP * step)
       end
 
+      best_candidate_x = nil
+      best_score = nil
       candidate_offsets.each do |offset|
         candidate_x = base_x + offset
         next if vertical_collision?(candidate_x, y1, y2, occupied_verticals)
+        next if vertical_intersects_node?(candidate_x, y1, y2, node_obstacles)
 
-        return candidate_x
+        sibling_left_x = [child_anchors.first[:x], candidate_x].min
+        sibling_right_x = [child_anchors.last[:x], candidate_x].max
+        next if horizontal_bus_collision?(sibling_left_x, sibling_right_x, y2, occupied_horizontals)
+
+        distance_cost = (candidate_x - base_x).abs
+        direction_penalty = preferred_direction * (candidate_x - base_x) >= 0 ? 0.0 : 0.25
+        clearance_penalty = vertical_clearance_penalty(candidate_x, y1, y2, occupied_verticals)
+        horizontal_penalty = horizontal_clearance_penalty(
+          sibling_left_x,
+          sibling_right_x,
+          y2,
+          occupied_horizontals
+        )
+        score = (distance_cost * 1.5) + direction_penalty + (clearance_penalty * 0.35) + horizontal_penalty
+        next unless best_score.nil? || score < best_score
+
+        best_score = score
+        best_candidate_x = candidate_x
       end
 
+      return best_candidate_x unless best_candidate_x.nil?
+
       base_x
+    end
+
+    def resolve_child_connector_x(
+      child_x,
+      sibling_y,
+      child_y,
+      branch_x,
+      occupied_verticals,
+      occupied_horizontals,
+      node_obstacles
+    )
+      preferred_direction = branch_x <= child_x ? -1.0 : 1.0
+
+      candidate_offsets = [0.0]
+      1.upto(MAX_BRANCH_SHIFT_STEPS) do |step|
+        candidate_offsets << (preferred_direction * EDGE_LANE_GAP * step)
+        candidate_offsets << (-preferred_direction * EDGE_LANE_GAP * step)
+      end
+
+      best_candidate_x = nil
+      best_score = nil
+      candidate_offsets.each do |offset|
+        candidate_x = child_x + offset
+        next if vertical_collision?(candidate_x, sibling_y, child_y, occupied_verticals)
+        next if vertical_intersects_node?(candidate_x, sibling_y, child_y - LINE_EPSILON, node_obstacles)
+
+        horizontal_penalty = 0.0
+        if (candidate_x - child_x).abs > 0.5
+          horizontal_left_x, horizontal_right_x = [candidate_x, child_x].minmax
+          next if horizontal_bus_collision?(horizontal_left_x, horizontal_right_x, child_y, occupied_horizontals)
+
+          horizontal_penalty = horizontal_clearance_penalty(
+            horizontal_left_x,
+            horizontal_right_x,
+            child_y,
+            occupied_horizontals
+          )
+        end
+
+        sibling_horizontal_penalty = 0.0
+        if (candidate_x - branch_x).abs > 0.5
+          sibling_left_x, sibling_right_x = [candidate_x, branch_x].minmax
+          next if horizontal_bus_collision?(sibling_left_x, sibling_right_x, sibling_y, occupied_horizontals)
+
+          sibling_horizontal_penalty = horizontal_clearance_penalty(
+            sibling_left_x,
+            sibling_right_x,
+            sibling_y,
+            occupied_horizontals
+          )
+        end
+
+        distance_cost = (candidate_x - child_x).abs
+        direction_penalty = preferred_direction * (candidate_x - child_x) >= 0 ? 0.0 : 0.25
+        clearance_penalty = vertical_clearance_penalty(candidate_x, sibling_y, child_y, occupied_verticals)
+        score = (distance_cost * 1.2) + direction_penalty + (clearance_penalty * 0.45) + horizontal_penalty + sibling_horizontal_penalty
+        next unless best_score.nil? || score < best_score
+
+        best_score = score
+        best_candidate_x = candidate_x
+      end
+
+      return best_candidate_x unless best_candidate_x.nil?
+
+      child_x
+    end
+
+    def resolve_spouse_leg_x(
+      base_x,
+      y1,
+      y2,
+      family_center_x,
+      occupied_verticals,
+      occupied_horizontals,
+      node_obstacles
+    )
+      preferred_direction = base_x < family_center_x ? -1.0 : 1.0
+      candidate_offsets = [0.0]
+      1.upto(MAX_LEG_SHIFT_STEPS) do |step|
+        candidate_offsets << (preferred_direction * EDGE_LANE_GAP * step)
+        candidate_offsets << (-preferred_direction * EDGE_LANE_GAP * step)
+      end
+
+      best_candidate_x = nil
+      best_score = nil
+      candidate_offsets.each do |offset|
+        candidate_x = base_x + offset
+        next if vertical_collision?(candidate_x, y1, y2, occupied_verticals)
+        next if vertical_intersects_node?(candidate_x, y1 + LINE_EPSILON, y2 - LINE_EPSILON, node_obstacles)
+
+        crossing_count = vertical_horizontal_cross_count(candidate_x, y1, y2, occupied_horizontals)
+        distance_cost = (candidate_x - base_x).abs
+        direction_penalty = preferred_direction * (candidate_x - base_x) >= 0 ? 0.0 : 0.25
+        clearance_penalty = vertical_clearance_penalty(candidate_x, y1, y2, occupied_verticals)
+        edge_penalty = spouse_leg_edge_penalty(candidate_x, y1, y2, node_obstacles)
+        score = (crossing_count * SPOUSE_CROSSING_PENALTY) + distance_cost + direction_penalty + clearance_penalty + edge_penalty
+        next unless best_score.nil? || score < best_score
+
+        best_score = score
+        best_candidate_x = candidate_x
+      end
+
+      return best_candidate_x unless best_candidate_x.nil?
+
+      base_x
+    end
+
+    def vertical_crosses_horizontals?(x, y1, y2, horizontals)
+      min_y, max_y = [y1, y2].minmax
+      horizontals.any? do |segment|
+        next false unless x > (segment[:x1] + LINE_EPSILON)
+        next false unless x < (segment[:x2] - LINE_EPSILON)
+        next false unless segment[:y] > (min_y + LINE_EPSILON)
+        next false unless segment[:y] < (max_y - LINE_EPSILON)
+
+        true
+      end
+    end
+
+    def vertical_horizontal_cross_count(x, y1, y2, horizontals)
+      min_y, max_y = [y1, y2].minmax
+      horizontals.count do |segment|
+        next false unless x > (segment[:x1] + LINE_EPSILON)
+        next false unless x < (segment[:x2] - LINE_EPSILON)
+        next false unless segment[:y] > (min_y + LINE_EPSILON)
+        next false unless segment[:y] < (max_y - LINE_EPSILON)
+
+        true
+      end
+    end
+
+    def spouse_leg_edge_penalty(x, y1, y2, node_obstacles)
+      min_y, max_y = [y1, y2].minmax
+      node_obstacles.sum(0.0) do |node|
+        node_top = node.y + LINE_EPSILON
+        node_bottom = node.y + node.height - LINE_EPSILON
+        next 0.0 unless max_y > node_top && min_y < node_bottom
+
+        left_distance = (x - node.x).abs
+        right_distance = (x - (node.x + node.width)).abs
+        edge_distance = [left_distance, right_distance].min
+        next 0.0 unless edge_distance < SPOUSE_EDGE_AVOID_MARGIN
+
+        SPOUSE_EDGE_AVOID_PENALTY * (SPOUSE_EDGE_AVOID_MARGIN - edge_distance) / SPOUSE_EDGE_AVOID_MARGIN
+      end
+    end
+
+    def vertical_clearance_penalty(x, y1, y2, occupied_verticals)
+      min_y, max_y = [y1, y2].minmax
+      occupied_verticals.sum(0.0) do |segment|
+        next 0.0 unless ranges_overlap?(min_y, max_y, segment[:y1], segment[:y2])
+
+        distance = (segment[:x] - x).abs
+        next 0.0 if distance >= PREFERRED_VERTICAL_CLEARANCE
+
+        VERTICAL_CLEARANCE_PENALTY * (PREFERRED_VERTICAL_CLEARANCE - distance) / PREFERRED_VERTICAL_CLEARANCE
+      end
+    end
+
+    def horizontal_clearance_penalty(x1, x2, y, occupied_horizontals)
+      occupied_horizontals.sum(0.0) do |segment|
+        next 0.0 unless ranges_overlap?(x1, x2, segment[:x1], segment[:x2])
+
+        distance = (segment[:y] - y).abs
+        next 0.0 if distance >= PREFERRED_HORIZONTAL_CLEARANCE
+
+        HORIZONTAL_CLEARANCE_PENALTY * (PREFERRED_HORIZONTAL_CLEARANCE - distance) / PREFERRED_HORIZONTAL_CLEARANCE
+      end
     end
 
     def vertical_collision?(x, y1, y2, occupied_verticals)
@@ -547,6 +1097,20 @@ module FamilyTree
         y1: [y1, y2].min,
         y2: [y1, y2].max
       }
+    end
+
+    def vertical_intersects_node?(x, y1, y2, nodes)
+      segment_top, segment_bottom = [y1, y2].minmax
+
+      nodes.any? do |node|
+        node_left = node.x + LINE_EPSILON
+        node_right = node.x + node.width - LINE_EPSILON
+        next false unless x > node_left && x < node_right
+
+        node_top = node.y + LINE_EPSILON
+        node_bottom = node.y + node.height - LINE_EPSILON
+        segment_top < node_bottom && segment_bottom > node_top
+      end
     end
 
     def ranges_overlap?(a1, a2, b1, b2)

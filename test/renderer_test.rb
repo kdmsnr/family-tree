@@ -161,6 +161,42 @@ class RendererTest < Minitest::Test
     assert_operator (horizontal_y_values.last - horizontal_y_values.first), :>=, 16.0
   end
 
+  def test_assigns_lane_offsets_by_overlap_and_prefers_short_spans
+    renderer = FamilyTree::Renderer.new
+    entries = [
+      {
+        family: FamilyTree::LayoutFamily.new(id: "long", spouse_ids: %w[l1 l2], child_ids: []),
+        spouse_nodes: [
+          FamilyTree::LayoutNode.new(id: "l1", label: "L1", x: 80.0, y: 0.0, width: 100.0, height: 60.0, missing: false),
+          FamilyTree::LayoutNode.new(id: "l2", label: "L2", x: 300.0, y: 0.0, width: 100.0, height: 60.0, missing: false)
+        ],
+        child_nodes: []
+      },
+      {
+        family: FamilyTree::LayoutFamily.new(id: "short", spouse_ids: %w[s1 s2], child_ids: []),
+        spouse_nodes: [
+          FamilyTree::LayoutNode.new(id: "s1", label: "S1", x: 120.0, y: 0.0, width: 100.0, height: 60.0, missing: false),
+          FamilyTree::LayoutNode.new(id: "s2", label: "S2", x: 180.0, y: 0.0, width: 100.0, height: 60.0, missing: false)
+        ],
+        child_nodes: []
+      },
+      {
+        family: FamilyTree::LayoutFamily.new(id: "far", spouse_ids: %w[f1 f2], child_ids: []),
+        spouse_nodes: [
+          FamilyTree::LayoutNode.new(id: "f1", label: "F1", x: 520.0, y: 0.0, width: 100.0, height: 60.0, missing: false),
+          FamilyTree::LayoutNode.new(id: "f2", label: "F2", x: 700.0, y: 0.0, width: 100.0, height: 60.0, missing: false)
+        ],
+        child_nodes: []
+      }
+    ]
+
+    offsets = renderer.send(:assign_lane_offsets, entries)
+
+    assert_in_delta 0.0, offsets.fetch("short"), 0.01
+    assert_in_delta FamilyTree::Renderer::EDGE_LANE_GAP, offsets.fetch("long"), 0.01
+    assert_in_delta 0.0, offsets.fetch("far"), 0.01
+  end
+
   def test_renders_bridge_paths_for_crossing_lines
     text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
     parse_result = FamilyTree::InputParser.new.parse_text(
@@ -269,6 +305,7 @@ class RendererTest < Minitest::Test
         x1, x2 = [segment[:x1], segment[:x2]].minmax
         { x1: x1, x2: x2, y: segment[:y1] }
       end
+      .select { |segment| (segment[:x2] - segment[:x1]) >= 24.0 }
 
     too_close = []
     horizontal.combination(2) do |left, right|
@@ -279,5 +316,420 @@ class RendererTest < Minitest::Test
     end
 
     assert_empty too_close
+  end
+
+  def test_avoids_child_verticals_running_through_corlys_node
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    svg = FamilyTree::Renderer.new.render(layout)
+    node_by_id = layout.nodes.each_with_object({}) { |node, acc| acc[node.id] = node }
+    corlys = node_by_id.fetch("g0v1m")
+
+    child_group = svg[/<g id="child-edges"[^>]*>(.*?)<\/g>/m, 1]
+    segments = child_group.scan(
+      /<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/
+    ).map do |x1, y1, x2, y2|
+      { x1: x1.to_f, y1: y1.to_f, x2: x2.to_f, y2: y2.to_f }
+    end
+
+    corlys_left = corlys.x + 0.01
+    corlys_right = corlys.x + corlys.width - 0.01
+    corlys_top = corlys.y + 0.01
+    corlys_bottom = corlys.y + corlys.height - 0.01
+    offending = segments.select do |segment|
+      next false unless (segment[:x1] - segment[:x2]).abs <= 0.01
+      next false unless segment[:x1] > corlys_left && segment[:x1] < corlys_right
+
+      y_top, y_bottom = [segment[:y1], segment[:y2]].minmax
+      y_top < corlys_bottom && y_bottom > corlys_top
+    end
+
+    assert_empty offending
+  end
+
+  def test_keeps_child_buses_away_from_spouse_rows_in_targaryen_sample
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    svg = FamilyTree::Renderer.new.render(layout)
+
+    child_group = svg[/<g id="child-edges"[^>]*>(.*?)<\/g>/m, 1]
+    spouse_group = svg[/<g id="spouse-edges"[^>]*>(.*?)<\/g>/m, 1]
+    child_horizontals = child_group.scan(
+      /<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/
+    ).map do |x1, y1, x2, y2|
+      { x1: x1.to_f, y1: y1.to_f, x2: x2.to_f, y2: y2.to_f }
+    end
+      .select { |segment| (segment[:y1] - segment[:y2]).abs <= 0.01 }
+      .map do |segment|
+        x1, x2 = [segment[:x1], segment[:x2]].minmax
+        { x1: x1, x2: x2, y: segment[:y1] }
+      end
+      .select { |segment| (segment[:x2] - segment[:x1]) >= 24.0 }
+
+    spouse_horizontals = spouse_group.scan(
+      /<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/
+    ).map do |x1, y1, x2, y2|
+      { x1: x1.to_f, y1: y1.to_f, x2: x2.to_f, y2: y2.to_f }
+    end
+      .select { |segment| (segment[:y1] - segment[:y2]).abs <= 0.01 }
+      .map do |segment|
+        x1, x2 = [segment[:x1], segment[:x2]].minmax
+        { x1: x1, x2: x2, y: segment[:y1] }
+      end
+      .select { |segment| (segment[:x2] - segment[:x1]) >= 24.0 }
+
+    too_close = []
+    child_horizontals.each do |child|
+      spouse_horizontals.each do |spouse|
+        next if child[:x2] < spouse[:x1] || spouse[:x2] < child[:x1]
+        next unless (child[:y] - spouse[:y]).abs < 10.0
+
+        too_close << [child, spouse]
+      end
+    end
+
+    assert_empty too_close
+  end
+
+  def test_keeps_overlapping_spouse_rows_apart_in_targaryen_sample
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    svg = FamilyTree::Renderer.new.render(layout)
+
+    spouse_group = svg[/<g id="spouse-edges"[^>]*>(.*?)<\/g>/m, 1]
+    spouse_horizontals = spouse_group.scan(
+      /<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/
+    ).map do |x1, y1, x2, y2|
+      { x1: x1.to_f, y1: y1.to_f, x2: x2.to_f, y2: y2.to_f }
+    end
+      .select { |segment| (segment[:y1] - segment[:y2]).abs <= 0.01 }
+      .map do |segment|
+        x1, x2 = [segment[:x1], segment[:x2]].minmax
+        { x1: x1, x2: x2, y: segment[:y1], width: x2 - x1 }
+      end
+      .select { |segment| segment[:width] >= 180.0 }
+
+    too_close = []
+    spouse_horizontals.combination(2) do |left, right|
+      next if left[:x2] < right[:x1] || right[:x2] < left[:x1]
+      next unless (left[:y] - right[:y]).abs < 20.0
+
+      too_close << [left, right]
+    end
+
+    assert_empty too_close
+  end
+
+  def test_does_not_draw_any_edge_line_through_node_interior_in_targaryen_sample
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    svg = FamilyTree::Renderer.new.render(layout)
+
+    lines = svg.scan(
+      /<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/
+    ).map do |x1, y1, x2, y2|
+      { x1: x1.to_f, y1: y1.to_f, x2: x2.to_f, y2: y2.to_f }
+    end.uniq
+
+    epsilon = 0.01
+    overlaps = []
+    lines.each do |segment|
+      vertical = (segment[:x1] - segment[:x2]).abs <= epsilon
+      horizontal = (segment[:y1] - segment[:y2]).abs <= epsilon
+      next unless vertical || horizontal
+
+      layout.nodes.each do |node|
+        node_left = node.x + epsilon
+        node_right = node.x + node.width - epsilon
+        node_top = node.y + epsilon
+        node_bottom = node.y + node.height - epsilon
+
+        if vertical
+          x = segment[:x1]
+          next unless x > node_left && x < node_right
+
+          y1, y2 = [segment[:y1], segment[:y2]].minmax
+          overlap = [y2, node_bottom].min - [y1, node_top].max
+          overlaps << [segment, node.id] if overlap > 0.0
+        else
+          y = segment[:y1]
+          next unless y > node_top && y < node_bottom
+
+          x1, x2 = [segment[:x1], segment[:x2]].minmax
+          overlap = [x2, node_right].min - [x1, node_left].max
+          overlaps << [segment, node.id] if overlap > 0.0
+        end
+      end
+    end
+
+    assert_empty overlaps
+  end
+
+  def test_does_not_draw_spouse_horizontal_segments_on_node_bottom_edges
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    svg = FamilyTree::Renderer.new.render(layout)
+
+    spouse_group = svg[/<g id="spouse-edges"[^>]*>(.*?)<\/g>/m, 1]
+    spouse_horizontals = spouse_group.scan(
+      /<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/
+    ).map do |x1, y1, x2, y2|
+      { x1: x1.to_f, y1: y1.to_f, x2: x2.to_f, y2: y2.to_f }
+    end
+      .select { |segment| (segment[:y1] - segment[:y2]).abs <= 0.01 }
+      .map do |segment|
+        x1, x2 = [segment[:x1], segment[:x2]].minmax
+        { x1: x1, x2: x2, y: segment[:y1] }
+      end
+
+    epsilon = 0.01
+    offending = []
+    layout.nodes.each do |node|
+      node_bottom = node.y + node.height
+      node_left = node.x + epsilon
+      node_right = node.x + node.width - epsilon
+      spouse_horizontals.each do |segment|
+        next unless (segment[:y] - node_bottom).abs <= epsilon
+
+        overlap = [segment[:x2], node_right].min - [segment[:x1], node_left].max
+        offending << [segment, node.id] if overlap > 0.0
+      end
+    end
+
+    assert_empty offending
+  end
+
+  def test_avoids_overlapping_spouse_bend_segments_in_targaryen_sample
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    svg = FamilyTree::Renderer.new.render(layout)
+
+    spouse_group = svg[/<g id="spouse-edges"[^>]*>(.*?)<\/g>/m, 1]
+    spouse_horizontals = spouse_group.scan(
+      /<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/
+    ).map do |x1, y1, x2, y2|
+      { x1: x1.to_f, y1: y1.to_f, x2: x2.to_f, y2: y2.to_f }
+    end
+      .select { |segment| (segment[:y1] - segment[:y2]).abs <= 0.01 }
+      .map do |segment|
+        x1, x2 = [segment[:x1], segment[:x2]].minmax
+        { x1: x1, x2: x2, y: segment[:y1], width: (x2 - x1) }
+      end
+      .select { |segment| segment[:width] >= 20.0 && segment[:width] <= 90.0 }
+
+    overlapping = []
+    spouse_horizontals.combination(2) do |left, right|
+      next unless (left[:y] - right[:y]).abs <= 0.01
+      next if left[:x2] <= right[:x1] || right[:x2] <= left[:x1]
+
+      overlapping << [left, right]
+    end
+
+    assert_empty overlapping
+  end
+
+  def test_distributes_daemon_spouse_legs_on_both_sides_when_spouses_are_same_side
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    node_by_id = layout.nodes.each_with_object({}) { |node, acc| acc[node.id] = node }
+    daemon = node_by_id.fetch("g1t5m")
+    daemon_center = daemon.x + (daemon.width / 2.0)
+    daemon_bottom = daemon.y + daemon.height
+
+    svg = FamilyTree::Renderer.new.render(layout)
+    spouse_group = svg[/<g id="spouse-edges"[^>]*>(.*?)<\/g>/m, 1]
+    leg_xs = spouse_group.scan(
+      /<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/
+    ).filter_map do |x1, y1, x2, y2|
+      x1_f = x1.to_f
+      y1_f = y1.to_f
+      x2_f = x2.to_f
+      y2_f = y2.to_f
+      next unless (y1_f - daemon_bottom).abs <= 0.01
+      next unless (x1_f - x2_f).abs <= 0.01
+      next unless y2_f > y1_f + 0.01
+
+      x1_f
+    end.uniq
+
+    assert leg_xs.any? { |x| x < daemon_center }
+    assert leg_xs.any? { |x| x > daemon_center }
+  end
+
+  def test_keeps_laenor_spouse_connection_without_long_detour
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    node_by_id = layout.nodes.each_with_object({}) { |node, acc| acc[node.id] = node }
+    laenor = node_by_id.fetch("g1v2m")
+    laenor_center = laenor.x + (laenor.width / 2.0)
+    laenor_bottom = laenor.y + laenor.height
+
+    svg = FamilyTree::Renderer.new.render(layout)
+    spouse_group = svg[/<g id="spouse-edges"[^>]*>(.*?)<\/g>/m, 1]
+    segments = spouse_group.scan(
+      /<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/
+    ).map do |x1, y1, x2, y2|
+      { x1: x1.to_f, y1: y1.to_f, x2: x2.to_f, y2: y2.to_f }
+    end
+
+    leg_xs = segments.filter_map do |segment|
+      next unless (segment[:x1] - segment[:x2]).abs <= 0.01
+      next unless (segment[:y1] - laenor_bottom).abs <= 0.01
+      next unless segment[:y2] > segment[:y1] + 0.01
+
+      segment[:x1]
+    end
+
+    refute_empty leg_xs
+    nearest = leg_xs.map { |x| (x - laenor_center).abs }.min
+    assert_operator nearest, :<=, 50.0
+
+    vertical_segments = segments.filter_map do |segment|
+      next unless (segment[:x1] - segment[:x2]).abs <= 0.01
+
+      y1, y2 = [segment[:y1], segment[:y2]].minmax
+      { x: segment[:x1], y1: y1, y2: y2 }
+    end
+    horizontal_segments = segments.filter_map do |segment|
+      next unless (segment[:y1] - segment[:y2]).abs <= 0.01
+
+      x1, x2 = [segment[:x1], segment[:x2]].minmax
+      { x1: x1, x2: x2, y: segment[:y1] }
+    end
+
+    detours = []
+    leg_xs.each do |leg_x|
+      leg_verticals = vertical_segments.select do |segment|
+        (segment[:x] - leg_x).abs <= 0.01 &&
+          (segment[:y1] - laenor_bottom).abs <= 0.01 &&
+          segment[:y2] > (laenor_bottom + 0.01)
+      end
+      leg_verticals.each do |leg_vertical|
+        bend_y = leg_vertical[:y2]
+        connected_horizontals = horizontal_segments.select do |segment|
+          next false unless (segment[:y] - bend_y).abs <= 0.01
+
+          (segment[:x1] - leg_x).abs <= 0.01 || (segment[:x2] - leg_x).abs <= 0.01
+        end
+        connected_horizontals.each do |segment|
+          other_x = (segment[:x1] - leg_x).abs <= 0.01 ? segment[:x2] : segment[:x1]
+          continues_down = vertical_segments.any? do |vertical|
+            (vertical[:x] - other_x).abs <= 0.01 &&
+              vertical[:y1] <= (bend_y + 0.01) &&
+              vertical[:y2] > (bend_y + 0.01)
+          end
+          detours << [leg_x, bend_y, other_x] if continues_down
+        end
+      end
+    end
+
+    assert_empty detours
+  end
+
+  def test_spouse_leg_prefers_lower_crossing_candidate_when_detour_is_reasonable
+    renderer = FamilyTree::Renderer.new
+    candidate_x = renderer.send(
+      :resolve_spouse_leg_x,
+      100.0,
+      0.0,
+      100.0,
+      50.0,
+      [],
+      [{ x1: 90.0, x2: 110.0, y: 50.0 }],
+      []
+    )
+
+    refute_in_delta 100.0, candidate_x, 0.01
+  end
+
+  def test_spouse_leg_avoids_huge_detour_for_single_crossing_reduction
+    renderer = FamilyTree::Renderer.new
+    candidate_x = renderer.send(
+      :resolve_spouse_leg_x,
+      100.0,
+      0.0,
+      100.0,
+      50.0,
+      [],
+      [{ x1: 0.0, x2: 200.0, y: 50.0 }],
+      []
+    )
+
+    assert_in_delta 100.0, candidate_x, 0.01
+  end
+
+  def test_does_not_run_spouse_vertical_along_laenor_left_edge
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    node_by_id = layout.nodes.each_with_object({}) { |node, acc| acc[node.id] = node }
+    laenor = node_by_id.fetch("g1v2m")
+
+    spouse_group = FamilyTree::Renderer.new.render(layout)[/<g id="spouse-edges"[^>]*>(.*?)<\/g>/m, 1]
+    segments = spouse_group.scan(
+      /<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/
+    ).map do |x1, y1, x2, y2|
+      { x1: x1.to_f, y1: y1.to_f, x2: x2.to_f, y2: y2.to_f }
+    end
+
+    epsilon = 0.01
+    laenor_left = laenor.x
+    edge_guard_margin = 10.0
+    laenor_top = laenor.y + epsilon
+    laenor_bottom = laenor.y + laenor.height - epsilon
+    offending = segments.select do |segment|
+      next false unless (segment[:x1] - segment[:x2]).abs <= epsilon
+      next false unless segment[:x1] >= (laenor_left - edge_guard_margin)
+      next false unless segment[:x1] <= (laenor_left + edge_guard_margin)
+
+      y1, y2 = [segment[:y1], segment[:y2]].minmax
+      [y2, laenor_bottom].min - [y1, laenor_top].max > 0.0
+    end
+
+    assert_empty offending
   end
 end
