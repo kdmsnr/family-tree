@@ -211,4 +211,73 @@ class RendererTest < Minitest::Test
 
     assert_empty missing
   end
+
+  def test_avoids_overlapping_vertical_child_segments_in_targaryen_sample
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    svg = FamilyTree::Renderer.new.render(layout)
+
+    child_group = svg[/<g id="child-edges"[^>]*>(.*?)<\/g>/m, 1]
+    segments = child_group.scan(
+      /<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/
+    ).map do |x1, y1, x2, y2|
+      { x1: x1.to_f, y1: y1.to_f, x2: x2.to_f, y2: y2.to_f }
+    end
+    vertical = segments
+      .select { |segment| (segment[:x1] - segment[:x2]).abs <= 0.01 }
+      .map do |segment|
+        y1, y2 = [segment[:y1], segment[:y2]].minmax
+        { x: segment[:x1], y1: y1, y2: y2 }
+      end
+
+    overlaps = []
+    vertical.combination(2) do |left, right|
+      next unless (left[:x] - right[:x]).abs <= 0.01
+
+      overlap_top = [left[:y1], right[:y1]].max
+      overlap_bottom = [left[:y2], right[:y2]].min
+      overlaps << [left[:x], overlap_top, overlap_bottom] if (overlap_bottom - overlap_top) > 0.5
+    end
+
+    assert_empty overlaps
+  end
+
+  def test_keeps_overlapping_child_buses_apart_in_targaryen_sample
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    svg = FamilyTree::Renderer.new.render(layout)
+
+    child_group = svg[/<g id="child-edges"[^>]*>(.*?)<\/g>/m, 1]
+    segments = child_group.scan(
+      /<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/
+    ).map do |x1, y1, x2, y2|
+      { x1: x1.to_f, y1: y1.to_f, x2: x2.to_f, y2: y2.to_f }
+    end
+    horizontal = segments
+      .select { |segment| (segment[:y1] - segment[:y2]).abs <= 0.01 }
+      .map do |segment|
+        x1, x2 = [segment[:x1], segment[:x2]].minmax
+        { x1: x1, x2: x2, y: segment[:y1] }
+      end
+
+    too_close = []
+    horizontal.combination(2) do |left, right|
+      next if left[:x2] < right[:x1] || right[:x2] < left[:x1]
+      next unless (left[:y] - right[:y]).abs < 10.0
+
+      too_close << [left, right]
+    end
+
+    assert_empty too_close
+  end
 end

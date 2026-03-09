@@ -1,32 +1,29 @@
 # family-showcase.ftree
 # サザエさん家族をベースにした総合サンプル
-# Includes:
-# - multiple generations
-# - siblings
-# - branching families (Norisuke/Taiko/Ikura)
+# 画像つきノード + 複数世代 + 兄弟 + 分岐家系
 
 # Generation 0
-person g0m name="磯野（波平・海平・なぎえの父）" sex=M birth=1870
-person g0f name="磯野（波平・海平・なぎえの母）" sex=F birth=1875
+person g0m name="磯野（波平・海平・なぎえの父）" sex=M birth=1870 image=images/person-placeholder.svg
+person g0f name="磯野（波平・海平・なぎえの母）" sex=F birth=1875 image=images/person-placeholder.svg
 
 # Generation 1
-person g1b name="磯野 海平" sex=M birth=1895
-person g1m name="磯野 波平" sex=M birth=1895 death=1982
-person g1f name="磯野 フネ" sex=F birth=1901 death=1979
-person g1s name="波野 なぎえ" sex=F birth=1904
-person g1u name="波野（ノリスケ父）" sex=M birth=1900
+person g1b name="磯野 海平" sex=M birth=1895 image=images/person-placeholder.svg
+person g1m name="磯野 波平" sex=M birth=1895 death=1982 image=images/person-placeholder.svg
+person g1f name="磯野 フネ" sex=F birth=1901 death=1979 image=images/person-placeholder.svg
+person g1s name="波野 なぎえ" sex=F birth=1904 image=images/person-placeholder.svg
+person g1u name="波野（ノリスケ父）" sex=M birth=1900 image=images/person-placeholder.svg
 
 # Generation 2
-person g2f1 name="フグ田 サザエ" sex=F birth=1922
-person g2m1 name="フグ田 マスオ" sex=M birth=1911
-person g2m2 name="磯野 カツオ" sex=M birth=1938
-person g2f2 name="磯野 ワカメ" sex=F birth=1942
-person g2m3 name="波野 ノリスケ" sex=M birth=1918
-person g2f3 name="波野 タイ子" sex=F birth=1924
+person g2f1 name="フグ田 サザエ" sex=F birth=1922 image=images/person-placeholder.svg
+person g2m1 name="フグ田 マスオ" sex=M birth=1911 image=images/person-placeholder.svg
+person g2m2 name="磯野 カツオ" sex=M birth=1938 image=images/person-placeholder.svg
+person g2f2 name="磯野 ワカメ" sex=F birth=1942 image=images/person-placeholder.svg
+person g2m3 name="波野 ノリスケ" sex=M birth=1918 image=images/person-placeholder.svg
+person g2f3 name="波野 タイ子" sex=F birth=1924 image=images/person-placeholder.svg
 
 # Generation 3
-person g3m1 name="フグ田 タラオ" sex=M birth=1948
-person g3m2 name="波野 イクラ" sex=M birth=1950
+person g3m1 name="フグ田 タラオ" sex=M birth=1948 image=images/person-placeholder.svg
+person g3m2 name="波野 イクラ" sex=M birth=1950 image=images/person-placeholder.svg
 
 family f0 husband=g0m wife=g0f children=g1b,g1m,g1s
 family f1 husband=g1m wife=g1f children=g2f1,g2m2,g2f2

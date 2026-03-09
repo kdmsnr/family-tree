@@ -13,13 +13,13 @@
 <line x1="550.00" y1="332.00" x2="550.00" y2="408.00"/>
 <line x1="762.00" y1="332.00" x2="762.00" y2="408.00"/>
 <line x1="762.00" y1="316.00" x2="774.00" y2="316.00"/>
-<line x1="774.00" y1="316.00" x2="774.00" y2="347.00"/>
-<line x1="774.00" y1="347.00" x2="974.00" y2="347.00"/>
-<line x1="974.00" y1="347.00" x2="974.00" y2="408.00"/>
+<line x1="774.00" y1="316.00" x2="774.00" y2="353.00"/>
+<line x1="774.00" y1="353.00" x2="974.00" y2="353.00"/>
+<line x1="974.00" y1="353.00" x2="974.00" y2="408.00"/>
 <line x1="232.00" y1="484.00" x2="232.00" y2="512.00"/>
 <line x1="232.00" y1="512.00" x2="232.00" y2="588.00"/>
-<line x1="1080.00" y1="496.00" x2="1080.00" y2="527.00"/>
-<line x1="1080.00" y1="527.00" x2="1080.00" y2="588.00"/>
+<line x1="1080.00" y1="496.00" x2="1080.00" y2="533.00"/>
+<line x1="1080.00" y1="533.00" x2="1080.00" y2="588.00"/>
 </g>
 <g id="child-edges" stroke="#5d5d5d" stroke-width="1.4" stroke-dasharray="5 3" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.92">
 <line x1="232.00" y1="124.00" x2="232.00" y2="152.00"/>
@@ -33,13 +33,13 @@
 <line x1="550.00" y1="332.00" x2="550.00" y2="408.00"/>
 <line x1="762.00" y1="332.00" x2="762.00" y2="408.00"/>
 <line x1="762.00" y1="316.00" x2="774.00" y2="316.00"/>
-<line x1="774.00" y1="316.00" x2="774.00" y2="347.00"/>
-<line x1="774.00" y1="347.00" x2="974.00" y2="347.00"/>
-<line x1="974.00" y1="347.00" x2="974.00" y2="408.00"/>
+<line x1="774.00" y1="316.00" x2="774.00" y2="353.00"/>
+<line x1="774.00" y1="353.00" x2="974.00" y2="353.00"/>
+<line x1="974.00" y1="353.00" x2="974.00" y2="408.00"/>
 <line x1="232.00" y1="484.00" x2="232.00" y2="512.00"/>
 <line x1="232.00" y1="512.00" x2="232.00" y2="588.00"/>
-<line x1="1080.00" y1="496.00" x2="1080.00" y2="527.00"/>
-<line x1="1080.00" y1="527.00" x2="1080.00" y2="588.00"/>
+<line x1="1080.00" y1="496.00" x2="1080.00" y2="533.00"/>
+<line x1="1080.00" y1="533.00" x2="1080.00" y2="588.00"/>
 </g>
 <g id="spouse-edges" stroke="#1f4e79" stroke-width="2.0" fill="none" stroke-linecap="round" stroke-linejoin="round">
 <line x1="169.68" y1="108.00" x2="169.68" y2="124.00"/>
@@ -58,6 +58,12 @@
 <line x1="1142.32" y1="468.00" x2="1142.32" y2="496.00"/>
 <line x1="1017.68" y1="496.00" x2="1142.32" y2="496.00"/>
 </g>
+<g id="child-bridge-cutouts" fill="#ffffff">
+<circle cx="593.68" cy="304.00" r="5.80"/>
+</g>
+<g id="spouse-bridges" stroke="#1f4e79" stroke-width="2.0" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M 589.68 304.00 A 4.00 4.00 0 0 1 593.68 300.00 A 4.00 4.00 0 0 1 597.68 304.00"/>
+</g>
 <g id="nodes">
 <rect x="260.00" y="48.00" width="156.00" height="60.00" rx="10.0" ry="10.0" fill="#f8f8f8" stroke="#333333"/>
 <rect x="48.00" y="48.00" width="156.00" height="60.00" rx="10.0" ry="10.0" fill="#f8f8f8" stroke="#333333"/>
@@ -75,36 +81,53 @@
 <rect x="154.00" y="588.00" width="156.00" height="60.00" rx="10.0" ry="10.0" fill="#f8f8f8" stroke="#333333"/>
 <rect x="1002.00" y="588.00" width="156.00" height="60.00" rx="10.0" ry="10.0" fill="#f8f8f8" stroke="#333333"/>
 </g>
+<g id="node-images">
+<image x="268.00" y="60.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="56.00" y="60.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="56.00" y="240.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="692.00" y="240.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="268.00" y="240.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="480.00" y="240.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="904.00" y="240.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="268.00" y="420.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="692.00" y="420.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="1116.00" y="420.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="56.00" y="420.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="480.00" y="420.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="904.00" y="420.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="162.00" y="600.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+<image x="1010.00" y="600.00" width="36.00" height="36.00" href="images/person-placeholder.svg" preserveAspectRatio="xMidYMid slice"/>
+</g>
 <g id="labels" fill="#1f1f1f" font-family="Helvetica, Arial, sans-serif" font-size="13.0" text-anchor="middle">
-<text x="338.00" y="74.00">磯野（波平・海平・なぎえの母）</text>
-<text x="338.00" y="90.00">1875-?</text>
-<text x="126.00" y="74.00">磯野（波平・海平・なぎえの父）</text>
-<text x="126.00" y="90.00">1870-?</text>
-<text x="126.00" y="254.00">磯野 海平</text>
-<text x="126.00" y="270.00">1895-?</text>
-<text x="762.00" y="254.00">磯野 フネ</text>
-<text x="762.00" y="270.00">1901-1979</text>
-<text x="338.00" y="254.00">磯野 波平</text>
-<text x="338.00" y="270.00">1895-1982</text>
-<text x="550.00" y="254.00">波野 なぎえ</text>
-<text x="550.00" y="270.00">1904-?</text>
-<text x="974.00" y="254.00">波野（ノリスケ父）</text>
-<text x="974.00" y="270.00">1900-?</text>
-<text x="338.00" y="434.00">フグ田 サザエ</text>
-<text x="338.00" y="450.00">1922-?</text>
-<text x="762.00" y="434.00">磯野 ワカメ</text>
-<text x="762.00" y="450.00">1942-?</text>
-<text x="1186.00" y="434.00">波野 タイ子</text>
-<text x="1186.00" y="450.00">1924-?</text>
-<text x="126.00" y="434.00">フグ田 マスオ</text>
-<text x="126.00" y="450.00">1911-?</text>
-<text x="550.00" y="434.00">磯野 カツオ</text>
-<text x="550.00" y="450.00">1938-?</text>
-<text x="974.00" y="434.00">波野 ノリスケ</text>
-<text x="974.00" y="450.00">1918-?</text>
-<text x="232.00" y="614.00">フグ田 タラオ</text>
-<text x="232.00" y="630.00">1948-?</text>
-<text x="1080.00" y="614.00">波野 イクラ</text>
-<text x="1080.00" y="630.00">1950-?</text>
+<text x="312.00" y="74.00" text-anchor="start">磯野（波平・海平・なぎえの母）</text>
+<text x="312.00" y="90.00" text-anchor="start">1875-?</text>
+<text x="100.00" y="74.00" text-anchor="start">磯野（波平・海平・なぎえの父）</text>
+<text x="100.00" y="90.00" text-anchor="start">1870-?</text>
+<text x="100.00" y="254.00" text-anchor="start">磯野 海平</text>
+<text x="100.00" y="270.00" text-anchor="start">1895-?</text>
+<text x="736.00" y="254.00" text-anchor="start">磯野 フネ</text>
+<text x="736.00" y="270.00" text-anchor="start">1901-1979</text>
+<text x="312.00" y="254.00" text-anchor="start">磯野 波平</text>
+<text x="312.00" y="270.00" text-anchor="start">1895-1982</text>
+<text x="524.00" y="254.00" text-anchor="start">波野 なぎえ</text>
+<text x="524.00" y="270.00" text-anchor="start">1904-?</text>
+<text x="948.00" y="254.00" text-anchor="start">波野（ノリスケ父）</text>
+<text x="948.00" y="270.00" text-anchor="start">1900-?</text>
+<text x="312.00" y="434.00" text-anchor="start">フグ田 サザエ</text>
+<text x="312.00" y="450.00" text-anchor="start">1922-?</text>
+<text x="736.00" y="434.00" text-anchor="start">磯野 ワカメ</text>
+<text x="736.00" y="450.00" text-anchor="start">1942-?</text>
+<text x="1160.00" y="434.00" text-anchor="start">波野 タイ子</text>
+<text x="1160.00" y="450.00" text-anchor="start">1924-?</text>
+<text x="100.00" y="434.00" text-anchor="start">フグ田 マスオ</text>
+<text x="100.00" y="450.00" text-anchor="start">1911-?</text>
+<text x="524.00" y="434.00" text-anchor="start">磯野 カツオ</text>
+<text x="524.00" y="450.00" text-anchor="start">1938-?</text>
+<text x="948.00" y="434.00" text-anchor="start">波野 ノリスケ</text>
+<text x="948.00" y="450.00" text-anchor="start">1918-?</text>
+<text x="206.00" y="614.00" text-anchor="start">フグ田 タラオ</text>
+<text x="206.00" y="630.00" text-anchor="start">1948-?</text>
+<text x="1054.00" y="614.00" text-anchor="start">波野 イクラ</text>
+<text x="1054.00" y="630.00" text-anchor="start">1950-?</text>
 </g>
 </svg>

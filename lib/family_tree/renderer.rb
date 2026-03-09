@@ -12,6 +12,7 @@ module FamilyTree
     SIBLING_LANE_OFFSET_FACTOR = 0.75
     EDGE_LANE_GAP = 12.0
     MIN_VERTICAL_GAP = 10.0
+    MIN_SIBLING_BUS_VERTICAL_GAP = 10.0
     SPOUSE_INNER_OFFSET_RATIO = 0.28
     NODE_INNER_MARGIN = 12.0
     VERTICAL_COLLISION_THRESHOLD = 6.0
@@ -110,6 +111,7 @@ module FamilyTree
       spouse_lines = []
       child_lines = []
       occupied_child_verticals = []
+      occupied_child_horizontals = []
       entries = families.filter_map do |family|
         spouse_nodes = family.spouse_ids.filter_map { |person_id| node_by_id[person_id] }
         child_nodes = family.child_ids.filter_map { |person_id| node_by_id[person_id] }
@@ -143,7 +145,8 @@ module FamilyTree
           marriage_y,
           entry[:child_nodes],
           lane_offset,
-          occupied_child_verticals
+          occupied_child_verticals,
+          occupied_child_horizontals
         )
       end
 
@@ -390,21 +393,20 @@ module FamilyTree
       end
     end
 
-    def draw_children_section(lines, trunk_x, marriage_y, child_nodes, lane_offset, occupied_verticals)
+    def draw_children_section(lines, trunk_x, marriage_y, child_nodes, lane_offset, occupied_verticals, occupied_horizontals)
       return if child_nodes.empty?
 
       child_anchors = child_nodes.map { |node| [node_center_x(node), node.y] }.sort_by(&:first)
       min_child_y = child_anchors.map(&:last).min
       desired_sibling_y = marriage_y + SIBLING_GAP + (lane_offset * SIBLING_LANE_OFFSET_FACTOR)
-      sibling_y = [desired_sibling_y, min_child_y - MIN_VERTICAL_GAP].min
-      sibling_y = marriage_y + MIN_VERTICAL_GAP if sibling_y <= marriage_y + MIN_VERTICAL_GAP
-
-      branch_x = resolve_branch_x(
+      sibling_y, branch_x = resolve_sibling_geometry(
         trunk_x,
         marriage_y,
-        sibling_y,
+        desired_sibling_y,
+        min_child_y,
         child_anchors,
-        occupied_verticals
+        occupied_verticals,
+        occupied_horizontals
       )
 
       if (branch_x - trunk_x).abs > 0.5
@@ -418,14 +420,97 @@ module FamilyTree
         sibling_left_x = [child_anchors.first[0], branch_x].min
         sibling_right_x = [child_anchors.last[0], branch_x].max
         lines << svg_line(sibling_left_x, sibling_y, sibling_right_x, sibling_y)
+        register_horizontal_segment(occupied_horizontals, sibling_left_x, sibling_right_x, sibling_y)
       elsif (branch_x - child_anchors.first[0]).abs > 0.5
         lines << svg_line(branch_x, sibling_y, child_anchors.first[0], sibling_y)
+        register_horizontal_segment(
+          occupied_horizontals,
+          [branch_x, child_anchors.first[0]].min,
+          [branch_x, child_anchors.first[0]].max,
+          sibling_y
+        )
       end
 
       child_anchors.each do |child_x, child_y|
         lines << svg_line(child_x, sibling_y, child_x, child_y)
         register_vertical_segment(occupied_verticals, child_x, sibling_y, child_y)
       end
+    end
+
+    def resolve_sibling_geometry(
+      trunk_x,
+      marriage_y,
+      desired_sibling_y,
+      min_child_y,
+      child_anchors,
+      occupied_verticals,
+      occupied_horizontals
+    )
+      max_sibling_y = min_child_y - MIN_VERTICAL_GAP
+      min_sibling_y = marriage_y + MIN_VERTICAL_GAP
+      if max_sibling_y <= min_sibling_y
+        sibling_y = [[desired_sibling_y, min_sibling_y].max, max_sibling_y].min
+        branch_x = resolve_branch_x(
+          trunk_x,
+          marriage_y,
+          sibling_y,
+          child_anchors,
+          occupied_verticals
+        )
+        return [sibling_y, branch_x]
+      end
+
+      step = [EDGE_LANE_GAP * 0.5, 4.0].max
+      candidate_y = [[desired_sibling_y, min_sibling_y].max, max_sibling_y].min
+      while candidate_y <= max_sibling_y + LINE_EPSILON
+        candidate_branch_x = resolve_branch_x(
+          trunk_x,
+          marriage_y,
+          candidate_y,
+          child_anchors,
+          occupied_verticals
+        )
+        sibling_left_x = [child_anchors.first[0], candidate_branch_x].min
+        sibling_right_x = [child_anchors.last[0], candidate_branch_x].max
+
+        collision = child_anchors.any? do |child_x, child_y|
+          vertical_collision?(child_x, candidate_y, child_y, occupied_verticals)
+        end
+        bus_collision = horizontal_bus_collision?(
+          sibling_left_x,
+          sibling_right_x,
+          candidate_y,
+          occupied_horizontals
+        )
+        return [candidate_y, candidate_branch_x] unless collision || bus_collision
+
+        candidate_y += step
+      end
+
+      final_branch_x = resolve_branch_x(
+        trunk_x,
+        marriage_y,
+        max_sibling_y,
+        child_anchors,
+        occupied_verticals
+      )
+      [max_sibling_y, final_branch_x]
+    end
+
+    def horizontal_bus_collision?(x1, x2, y, occupied_horizontals)
+      occupied_horizontals.any? do |segment|
+        next false unless ranges_overlap?(x1, x2, segment[:x1], segment[:x2])
+
+        (segment[:y] - y).abs < MIN_SIBLING_BUS_VERTICAL_GAP
+      end
+    end
+
+    def register_horizontal_segment(occupied_horizontals, x1, x2, y)
+      occupied_horizontals << {
+        x1: [x1, x2].min,
+        x2: [x1, x2].max,
+        y: y
+      }
     end
 
     def resolve_branch_x(base_x, y1, y2, child_anchors, occupied_verticals)

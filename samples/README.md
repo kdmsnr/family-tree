@@ -6,6 +6,7 @@
   - 複数世代
   - 兄弟
   - 分岐する家系（ノリスケ・タイ子・イクラ）
+  - `image=` によるノード画像表示
 - `family-showcase.svg`: `family-showcase.ftree` から生成したSVG例
 - `jojo-showcase.ftree`: ジョジョ家系ベースの総合サンプル
   - 複数世代
