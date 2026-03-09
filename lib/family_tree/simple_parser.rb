@@ -4,7 +4,7 @@ require "shellwords"
 
 module FamilyTree
   class SimpleParser
-    SUPPORTED_PERSON_KEYS = %w[name sex birth born death died].freeze
+    SUPPORTED_PERSON_KEYS = %w[name sex birth born death died image avatar photo].freeze
     SUPPORTED_FAMILY_KEYS = %w[husband wife children kids spouses].freeze
 
     def initialize(strict: false)
@@ -77,13 +77,15 @@ module FamilyTree
       birth = extract_year(attrs["birth"] || attrs["born"])
       death = extract_year(attrs["death"] || attrs["died"])
       sex = attrs["sex"]
+      image_path = attrs["image"] || attrs["avatar"] || attrs["photo"]
 
       persons_by_id[id] = Person.new(
         id: id,
         name: name,
         sex: blank?(sex) ? nil : sex,
         birth_year: birth,
-        death_year: death
+        death_year: death,
+        image_path: blank?(image_path) ? nil : image_path
       )
     end
 

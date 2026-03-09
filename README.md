@@ -29,19 +29,20 @@ bin/family-tree render INPUT -o OUTPUT.svg --format simple
 
 - レコード: `INDI`, `FAM`
 - 個人情報: `NAME`, `SEX`, `BIRT`, `DEAT`, `DATE`
+- 画像: `OBJE`, `FILE`（`INDI`レコード内の最小サポート）
 - 家族情報: `HUSB`, `WIFE`, `CHIL`
 
 ## 簡易テキスト記法（推奨: 手書き入力）
 
 ```text
-person p1 name="Taro Yamada" sex=M birth=1970
+person p1 name="Taro Yamada" sex=M birth=1970 image=images/taro.png
 person p2 name="Hanako Suzuki" sex=F birth=1973
 person p3 name="Ichiro Yamada" sex=M birth=2000
 family f1 husband=p1 wife=p2 children=p3
 ```
 
 - `person <id> key=value ...`
-  - 対応キー: `name`, `sex`, `birth|born`, `death|died`
+  - 対応キー: `name`, `sex`, `birth|born`, `death|died`, `image|avatar|photo`
 - `family <id> key=value ...`
   - 対応キー: `husband`, `wife`, `children|kids`, `spouses`
   - `spouses` は `spouses=p1,p2` の形式

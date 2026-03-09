@@ -1,0 +1,105 @@
+# targaryen-three-eras.ftree
+# One file covering:
+# - House of the Dragon era
+# - A Knight of the Seven Kingdoms era
+# - Game of Thrones era
+
+# HOTD roots
+person g0t1m name="Jaehaerys I Targaryen" sex=M
+person g0t1f name="Alysanne Targaryen" sex=F
+person g0t2f name="Alyssa Targaryen" sex=F
+person g0b1f name="Jocelyn Baratheon" sex=F
+person g0v1m name="Corlys Velaryon" sex=M
+
+person g1t1m name="Aemon Targaryen" sex=M
+person g1t2m name="Baelon Targaryen" sex=M
+person g1t3f name="Rhaenys Targaryen" sex=F
+person g1t4m name="Viserys I Targaryen" sex=M
+person g1t5m name="Daemon Targaryen" sex=M
+person g1v1f name="Laena Velaryon" sex=F
+person g1v2m name="Laenor Velaryon" sex=M
+person g1a1f name="Aemma Arryn" sex=F
+person g1h1f name="Alicent Hightower" sex=F
+
+person g2t1f name="Rhaenyra Targaryen" sex=F
+person g2t2m name="Aegon II Targaryen" sex=M
+person g2t3f name="Helaena Targaryen" sex=F
+person g2t4m name="Aemond Targaryen" sex=M
+person g2t5m name="Daeron Targaryen" sex=M
+person g2t6f name="Baela Targaryen" sex=F
+person g2t7f name="Rhaena Targaryen" sex=F
+person g2t8m name="Jacaerys Velaryon" sex=M
+person g2t9m name="Lucerys Velaryon" sex=M
+person g2t10m name="Joffrey Velaryon" sex=M
+person g2t11m name="Aegon III Targaryen" sex=M
+person g2t12m name="Viserys II Targaryen" sex=M
+person g2r1f name="Larra Rogare" sex=F
+
+person g3t1m name="Jaehaerys Targaryen" sex=M
+person g3t2f name="Jaehaera Targaryen" sex=F
+person g3t3m name="Maelor Targaryen" sex=M
+person g3t4m name="Aegon IV Targaryen" sex=M
+person g3t5f name="Naerys Targaryen" sex=F
+
+# KOTSK era
+person g4t1m name="Daeron II Targaryen" sex=M
+person g4m1f name="Myriah Martell" sex=F
+person g4t2m name="Baelor Targaryen" sex=M
+person g4t3m name="Aerys I Targaryen" sex=M
+person g4t4m name="Rhaegel Targaryen" sex=M
+person g4t5m name="Maekar I Targaryen" sex=M
+person g4d2f name="Jena Dondarrion" sex=F
+person g4d1f name="Dyanna Dayne" sex=F
+person g4b1f name="Betha Blackwood" sex=F
+
+person g5t1m name="Daeron Targaryen" sex=M
+person g5t2m name="Aerion Targaryen" sex=M
+person g5t3m name="Aemon Targaryen" sex=M
+person g5t4m name="Aegon V Targaryen" sex=M
+person g5t5f name="Daella Targaryen" sex=F
+person g5t6f name="Rhae Targaryen" sex=F
+person g5t7m name="Valarr Targaryen" sex=M
+person g5t8m name="Matarys Targaryen" sex=M
+
+person g6t1m name="Duncan Targaryen" sex=M
+person g6t2m name="Jaehaerys II Targaryen" sex=M
+person g6t3f name="Shaera Targaryen" sex=F
+person g6t4m name="Daeron Targaryen" sex=M
+person g6t5f name="Rhaelle Targaryen" sex=F
+
+# GOT era
+person g7t1m name="Aerys II Targaryen" sex=M
+person g7t2f name="Rhaella Targaryen" sex=F
+person g7t3m name="Rhaegar Targaryen" sex=M
+person g7t4m name="Viserys Targaryen" sex=M
+person g7t5f name="Daenerys Targaryen" sex=F
+person g7m1f name="Elia Martell" sex=F
+person g7s1f name="Lyanna Stark" sex=F
+
+person g8t1f name="Rhaenys Targaryen" sex=F
+person g8t2m name="Aegon Targaryen" sex=M
+person g8t3m name="Jon Snow" sex=M
+
+family f0_jae husband=g0t1m wife=g0t1f children=g1t1m,g1t2m
+family f0_aemon husband=g1t1m wife=g0b1f children=g1t3f
+family f0_baelon husband=g1t2m wife=g0t2f children=g1t4m,g1t5m
+family f0_rhaenys husband=g0v1m wife=g1t3f children=g1v1f,g1v2m
+
+family f1_viserys_aemma husband=g1t4m wife=g1a1f children=g2t1f
+family f1_viserys_alicent husband=g1t4m wife=g1h1f children=g2t2m,g2t3f,g2t4m,g2t5m
+family f1_daemon_laena husband=g1t5m wife=g1v1f children=g2t6f,g2t7f
+family f1_rhaenyra_laenor husband=g1v2m wife=g2t1f children=g2t8m,g2t9m,g2t10m
+family f1_daemon_rhaenyra husband=g1t5m wife=g2t1f children=g2t11m,g2t12m
+family f1_aegon_helaena husband=g2t2m wife=g2t3f children=g3t1m,g3t2f,g3t3m
+family f1_viserys2_larra husband=g2t12m wife=g2r1f children=g3t4m
+family f1_aegon4_naerys husband=g3t4m wife=g3t5f children=g4t1m
+
+family f2_daeron2 husband=g4t1m wife=g4m1f children=g4t2m,g4t3m,g4t4m,g4t5m
+family f2_baelor_jena husband=g4t2m wife=g4d2f children=g5t7m,g5t8m
+family f2_maekar husband=g4t5m wife=g4d1f children=g5t1m,g5t2m,g5t3m,g5t5f,g5t4m,g5t6f
+family f2_aegon5 husband=g5t4m wife=g4b1f children=g6t1m,g6t2m,g6t3f,g6t4m,g6t5f
+
+family f3_jaehaerys2_shaera husband=g6t2m wife=g6t3f children=g7t1m,g7t2f
+family f3_aerys_rhaella husband=g7t1m wife=g7t2f children=g7t3m,g7t4m,g7t5f
+family f3_rhaegar_elia husband=g7t3m wife=g7m1f children=g8t1f,g8t2m
+family f3_rhaegar_lyanna husband=g7t3m wife=g7s1f children=g8t3m

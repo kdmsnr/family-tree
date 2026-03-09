@@ -50,4 +50,17 @@ class ParserTest < Minitest::Test
     result = FamilyTree::Parser.new.parse_text(text)
     assert_equal "I1", result.persons.first.name
   end
+
+  def test_parses_indi_object_file_as_image_path
+    text = <<~GEDCOM
+      0 @I1@ INDI
+      1 NAME Jon /Snow/
+      1 OBJE
+      2 FILE images/jon-snow.jpg
+      0 TRLR
+    GEDCOM
+
+    result = FamilyTree::Parser.new.parse_text(text)
+    assert_equal "images/jon-snow.jpg", result.persons.first.image_path
+  end
 end

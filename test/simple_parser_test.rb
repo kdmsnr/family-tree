@@ -38,4 +38,16 @@ class SimpleParserTest < Minitest::Test
 
     assert_includes error.message, "strict mode"
   end
+
+  def test_parses_person_image_attribute
+    text = <<~TREE
+      person p1 name="Taro Yamada" image=images/taro.png
+      person p2 name="Hanako Yamada"
+      family f1 spouses=p1,p2
+    TREE
+
+    result = FamilyTree::SimpleParser.new.parse_text(text)
+    person = result.persons.find { |item| item.id == "p1" }
+    assert_equal "images/taro.png", person.image_path
+  end
 end

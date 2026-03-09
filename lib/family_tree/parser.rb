@@ -107,7 +107,8 @@ module FamilyTree
             name: nil,
             sex: nil,
             birth_year: nil,
-            death_year: nil
+            death_year: nil,
+            image_path: nil
           }
         }
       when "FAM"
@@ -155,16 +156,30 @@ module FamilyTree
           data[:sex] = sex.empty? ? nil : sex
         when "BIRT", "DEAT"
           state.current_event = line.tag
+        when "OBJE"
+          media_path = normalize_media_path(line.value)
+          data[:image_path] = media_path unless media_path.nil?
+          state.current_event = line.tag
         else
           warn_unsupported(state, line, "INDI")
         end
       elsif line.level == 2 && state.current_event
-        if line.tag == "DATE"
-          year = extract_year(line.value)
-          key = (state.current_event == "BIRT") ? :birth_year : :death_year
-          data[key] = year if year
-        else
-          warn_unsupported(state, line, "#{state.current_event}")
+        case state.current_event
+        when "BIRT", "DEAT"
+          if line.tag == "DATE"
+            year = extract_year(line.value)
+            key = (state.current_event == "BIRT") ? :birth_year : :death_year
+            data[key] = year if year
+          else
+            warn_unsupported(state, line, state.current_event.to_s)
+          end
+        when "OBJE"
+          if line.tag == "FILE"
+            media_path = normalize_media_path(line.value)
+            data[:image_path] = media_path unless media_path.nil?
+          else
+            warn_unsupported(state, line, "OBJE")
+          end
         end
       elsif line.level == 2
         warn_unsupported(state, line, "INDI")
@@ -218,7 +233,8 @@ module FamilyTree
         name: data[:name] || id,
         sex: data[:sex],
         birth_year: data[:birth_year],
-        death_year: data[:death_year]
+        death_year: data[:death_year],
+        image_path: data[:image_path]
       )
       state.persons_by_id[id] = person
     end
@@ -261,6 +277,16 @@ module FamilyTree
 
       match = value.match(/(\d{4})/)
       match && match[1]
+    end
+
+    def normalize_media_path(value)
+      return nil if value.nil?
+
+      stripped = value.strip
+      return nil if stripped.empty?
+      return nil if stripped.match?(/\A@[^@]+@\z/)
+
+      stripped
     end
 
     def next_person_id(state)

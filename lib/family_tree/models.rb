@@ -10,6 +10,7 @@ module FamilyTree
     :sex,
     :birth_year,
     :death_year,
+    :image_path,
     keyword_init: true
   )
 
@@ -36,6 +37,7 @@ module FamilyTree
     :width,
     :height,
     :missing,
+    :image_path,
     keyword_init: true
   )
 

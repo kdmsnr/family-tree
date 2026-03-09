@@ -81,7 +81,8 @@ module FamilyTree
           y: center_y - (@metrics[:node_height] / 2.0),
           width: @metrics[:node_width],
           height: @metrics[:node_height],
-          missing: person.nil?
+          missing: person.nil?,
+          image_path: person&.image_path
         )
       end
 

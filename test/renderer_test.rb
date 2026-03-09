@@ -53,4 +53,162 @@ class RendererTest < Minitest::Test
 
     refute_includes svg, "<line x1=\"762.00\" y1=\"316.00\" x2=\"762.00\" y2=\"347.00\"/>"
   end
+
+  def test_connects_branch_to_sibling_bus_when_branch_is_outside_child_range
+    layout = FamilyTree::LayoutResult.new(
+      nodes: [
+        FamilyTree::LayoutNode.new(
+          id: "p1",
+          label: "Parent",
+          x: 0.0,
+          y: 0.0,
+          width: 100.0,
+          height: 50.0,
+          missing: false
+        ),
+        FamilyTree::LayoutNode.new(
+          id: "c1",
+          label: "Child 1",
+          x: 300.0,
+          y: 200.0,
+          width: 100.0,
+          height: 50.0,
+          missing: false
+        ),
+        FamilyTree::LayoutNode.new(
+          id: "c2",
+          label: "Child 2",
+          x: 500.0,
+          y: 200.0,
+          width: 100.0,
+          height: 50.0,
+          missing: false
+        )
+      ],
+      families: [
+        FamilyTree::LayoutFamily.new(
+          id: "f1",
+          spouse_ids: ["p1"],
+          child_ids: %w[c1 c2]
+        )
+      ],
+      canvas_width: 800,
+      canvas_height: 320
+    )
+
+    svg = FamilyTree::Renderer.new.render(layout)
+    assert_includes svg, "<line x1=\"50.00\" y1=\"94.00\" x2=\"550.00\" y2=\"94.00\"/>"
+  end
+
+  def test_renders_node_image_when_person_has_image_path
+    text = <<~TREE
+      person p1 name="Taro" image=images/taro.png
+    TREE
+    parse_result = FamilyTree::SimpleParser.new.parse_text(text)
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+
+    svg = FamilyTree::Renderer.new.render(layout)
+    assert_includes svg, "id=\"node-images\""
+    assert_includes svg, "href=\"images/taro.png\""
+    assert_includes svg, "text-anchor=\"start\""
+  end
+
+  def test_offsets_spouse_anchors_for_multiple_marriages_of_same_person
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    svg = FamilyTree::Renderer.new.render(layout)
+    node_by_id = layout.nodes.each_with_object({}) { |node, acc| acc[node.id] = node }
+    daemon = node_by_id.fetch("g1t5m")
+
+    daemon_bottom = format("%.2f", daemon.y + daemon.height)
+    leg_xs = svg
+      .scan(/<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/)
+      .select { |x1, y1, x2, _y2| y1 == daemon_bottom && x1 == x2 }
+      .map(&:first)
+      .uniq
+
+    assert_operator leg_xs.length, :>=, 2
+  end
+
+  def test_separates_marriage_rows_for_multiple_marriages
+    text = <<~TREE
+      person h name="Daemon"
+      person w1 name="Wife1"
+      person w2 name="Wife2"
+      person c1 name="Child1"
+      person c2 name="Child2"
+      family f1 husband=h wife=w1 children=c1
+      family f2 husband=h wife=w2 children=c2
+    TREE
+    parse_result = FamilyTree::InputParser.new.parse_text(text, format: "simple", input_path: "multi.ftree")
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    svg = FamilyTree::Renderer.new.render(layout)
+
+    spouse_group = svg[/<g id="spouse-edges"[^>]*>(.*?)<\/g>/m, 1]
+    horizontal_y_values = spouse_group
+      .scan(/<line x1="([0-9.]+)" y1="([0-9.]+)" x2="([0-9.]+)" y2="([0-9.]+)"\/>/)
+      .select { |_x1, y1, _x2, y2| y1 == y2 }
+      .map { |_x1, y1, _x2, _y2| y1.to_f }
+      .uniq
+      .sort
+
+    assert_operator horizontal_y_values.length, :>=, 2
+    assert_operator (horizontal_y_values.last - horizontal_y_values.first), :>=, 16.0
+  end
+
+  def test_renders_bridge_paths_for_crossing_lines
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    svg = FamilyTree::Renderer.new.render(layout)
+
+    assert_includes svg, "id=\"child-bridge-cutouts\""
+    assert_includes svg, "id=\"spouse-bridges\""
+    assert_includes svg, "id=\"child-bridges\""
+    assert_match(/<path d="M [0-9.]+ [0-9.]+ A [0-9.]+ [0-9.]+ 0 0 1 [0-9.]+ [0-9.]+ A [0-9.]+ [0-9.]+ 0 0 1 [0-9.]+ [0-9.]+"\/>/, svg)
+  end
+
+  def test_adds_bridge_for_all_cross_intersections
+    text = File.read(File.expand_path("../samples/targaryen-three-eras.ftree", __dir__))
+    parse_result = FamilyTree::InputParser.new.parse_text(
+      text,
+      format: "simple",
+      input_path: "targaryen-three-eras.ftree"
+    )
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    renderer = FamilyTree::Renderer.new
+    node_by_id = layout.nodes.each_with_object({}) { |node, acc| acc[node.id] = node }
+    spouse_edges, child_edges = renderer.send(:edge_lines, layout.families, node_by_id)
+    all_edges = spouse_edges + child_edges
+
+    expected_points = renderer.send(:dedupe_bridge_points, (
+      renderer.send(:bridge_points_for, horizontal_lines: spouse_edges, all_lines: all_edges) +
+      renderer.send(:bridge_points_for, horizontal_lines: child_edges, all_lines: all_edges)
+    ))
+
+    svg = renderer.render(layout)
+    bridge_points = svg.scan(
+      /<path d="M ([0-9.]+) ([0-9.]+) A [0-9.]+ [0-9.]+ 0 0 1 ([0-9.]+) [0-9.]+ A [0-9.]+ [0-9.]+ 0 0 1 ([0-9.]+) [0-9.]+"\/>/
+    ).map do |left_x, y, center_x, right_x|
+      # The parsed path encodes one bridge whose center is center_x/y.
+      [center_x.to_f, y.to_f, left_x.to_f, right_x.to_f]
+    end
+
+    missing = expected_points.reject do |point|
+      bridge_points.any? do |center_x, y, _left_x, _right_x|
+        (center_x - point[:x]).abs <= 0.01 && (y - point[:y]).abs <= 0.01
+      end
+    end
+
+    assert_empty missing
+  end
 end

@@ -98,6 +98,17 @@ class LayoutEngineTest < Minitest::Test
     refute overlaps
   end
 
+  def test_carries_image_path_from_person_to_layout_node
+    text = <<~TREE
+      person p1 name="Taro" image=images/taro.png
+    TREE
+    parse_result = FamilyTree::SimpleParser.new.parse_text(text)
+    layout = FamilyTree::LayoutEngine.new.layout(parse_result)
+    node = layout.nodes.find { |item| item.id == "p1" }
+
+    assert_equal "images/taro.png", node.image_path
+  end
+
   private
 
   def node_center_x(node)
